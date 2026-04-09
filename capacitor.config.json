@@ -1,0 +1,20 @@
+{
+  "appId": "com.travelspeak.app",
+  "appName": "TravelSpeak",
+  "webDir": "out",
+  "server": {
+    "url": "https://english-rho-seven.vercel.app",
+    "cleartext": false
+  },
+  "android": {
+    "backgroundColor": "#0a0a0a",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0a0a0a",
+      "showSpinner": false
+    }
+  }
+}
