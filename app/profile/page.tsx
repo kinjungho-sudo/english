@@ -1,26 +1,31 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import DashboardClient from './DashboardClient'
+import ProfileClient from './ProfileClient'
 
-export default async function DashboardPage() {
+export default async function ProfilePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/')
 
-  const [{ data: scenarios }, { data: progress }, { data: unmastered }, { data: mastered }] = await Promise.all([
-    supabase.from('scenarios').select('*').order('order_index'),
+  const [
+    { data: progress },
+    { data: mastered },
+    { data: allMistakes },
+    { data: scenarios },
+  ] = await Promise.all([
     supabase.from('user_progress').select('*').eq('user_id', user.id),
-    supabase.from('user_mistakes').select('*').eq('user_id', user.id).is('mastered_at', null),
     supabase.from('user_mistakes').select('*').eq('user_id', user.id).not('mastered_at', 'is', null),
+    supabase.from('user_mistakes').select('*').eq('user_id', user.id).is('mastered_at', null),
+    supabase.from('scenarios').select('*').order('order_index'),
   ])
 
   return (
-    <DashboardClient
+    <ProfileClient
       user={user}
-      scenarios={scenarios ?? []}
       progress={progress ?? []}
-      unmastered={unmastered ?? []}
       mastered={mastered ?? []}
+      unmastered={allMistakes ?? []}
+      scenarios={scenarios ?? []}
     />
   )
 }

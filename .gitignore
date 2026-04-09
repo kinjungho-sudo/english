@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# Capacitor build cache (android/ios tracked in git)
+.gradle
+
 # production
 /build
 
@@ -44,3 +47,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
