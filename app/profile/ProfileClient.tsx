@@ -34,9 +34,10 @@ export default function ProfileClient({ user, progress, mastered, unmastered, sc
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="game-wrap bg-gray-950">
+      <div className="game-card bg-gray-950">
       {/* Header */}
-      <header className="border-b border-gray-800/50 px-5 py-4 flex items-center justify-between">
+      <header className="shrink-0 border-b border-gray-800/50 px-5 py-4 flex items-center justify-between bg-gray-950 z-10">
         <Link href="/dashboard" className="text-gray-600 hover:text-gray-400 text-sm transition-colors">
           ← Dashboard
         </Link>
@@ -46,7 +47,7 @@ export default function ProfileClient({ user, progress, mastered, unmastered, sc
         </button>
       </header>
 
-      <div className="max-w-lg mx-auto px-5 py-8 space-y-5">
+      <div className="flex-1 overflow-y-auto px-5 py-8 space-y-5">
 
         {/* Level Card — hero */}
         <div
@@ -202,6 +203,7 @@ export default function ProfileClient({ user, progress, mastered, unmastered, sc
         )}
 
         <div className="pb-8" />
+      </div>
       </div>
     </div>
   )

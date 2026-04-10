@@ -41,8 +41,9 @@ export default async function ResultPage({
     { label: 'Keep practicing!', emoji: '💪', color: 'text-amber-400' }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
-      <div className="max-w-2xl mx-auto px-6 py-12 w-full">
+    <div className="game-wrap bg-gray-950">
+      <div className="game-card bg-gray-950">
+      <div className="flex-1 overflow-y-auto px-6 py-12">
         {/* Result Header */}
         <div className="text-center mb-10">
           <div className="text-6xl mb-4">{grade.emoji}</div>
@@ -110,6 +111,7 @@ export default async function ResultPage({
             다른 시나리오 보기
           </Link>
         </div>
+      </div>
       </div>
     </div>
   )

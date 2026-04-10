@@ -39,9 +39,10 @@ export default function DashboardClient({ user, scenarios, progress, unmastered,
   const hasReviewItems = unmastered.length > 0
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="game-wrap bg-gray-950">
+      <div className="game-card bg-gray-950">
       {/* Header */}
-      <header className="border-b border-gray-800/50 px-5 py-3.5 flex items-center justify-between">
+      <header className="shrink-0 border-b border-gray-800/50 px-5 py-3.5 flex items-center justify-between bg-gray-950 z-10">
         <div className="flex items-center gap-2">
           <span className="text-lg">✈️</span>
           <span className="font-black text-white tracking-widest text-sm uppercase">TravelSpeak</span>
@@ -61,7 +62,7 @@ export default function DashboardClient({ user, scenarios, progress, unmastered,
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-5 py-8">
+      <main className="flex-1 overflow-y-auto px-5 py-8">
         {/* Review Alert */}
         {hasReviewItems && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-6 animate-fade-in-up">
@@ -154,6 +155,7 @@ export default function DashboardClient({ user, scenarios, progress, unmastered,
           })}
         </div>
       </main>
+      </div>
     </div>
   )
 }

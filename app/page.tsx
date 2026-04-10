@@ -56,6 +56,26 @@ export default function GameLoginPage() {
     })
 
     if (signupErr) {
+      // 이미 다른 방식(Google 등)으로 가입된 계정 → 서버에서 비밀번호 동기화 후 재로그인
+      if (signupErr.message?.toLowerCase().includes('already registered')) {
+        const res = await fetch('/api/auth/sync-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        })
+        const { ok } = await res.json()
+        if (ok) {
+          const { error: retryErr } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          })
+          if (!retryErr) {
+            router.push('/dashboard')
+            router.refresh()
+            return
+          }
+        }
+      }
       setError('오류가 발생했습니다: ' + signupErr.message)
       setLoading(false)
       return
@@ -84,10 +104,11 @@ export default function GameLoginPage() {
   }
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden flex flex-col items-center justify-center px-6"
-      style={{ background: 'radial-gradient(ellipse at 50% 0%, #1a0a00 0%, #0a0a0f 60%, #000 100%)' }}
-    >
+    <div className="game-wrap" style={{ background: '#050508' }}>
+      <div
+        className="game-card flex flex-col items-center justify-center px-6"
+        style={{ background: 'radial-gradient(ellipse at 50% 0%, #1a0a00 0%, #0a0a0f 60%, #000 100%)' }}
+      >
       {/* Stars */}
       <div className="absolute inset-0 pointer-events-none">
         {stars.map((s, i) => (
@@ -182,6 +203,7 @@ export default function GameLoginPage() {
         <p className="mt-8 text-xs text-gray-800 tracking-widest text-center uppercase">
           Restaurant · Airport · Hotel
         </p>
+      </div>
       </div>
     </div>
   )
