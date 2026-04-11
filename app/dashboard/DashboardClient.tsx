@@ -9,13 +9,16 @@ import type { User } from '@supabase/supabase-js'
 
 type Props = {
   user: User
+  characterName: string
+  avatarEmoji: string
   scenarios: Scenario[]
   progress: UserProgress[]
   unmastered: UserMistake[]
   mastered: UserMistake[]
 }
 
-export default function DashboardClient({ user, scenarios, progress, unmastered, mastered }: Props) {
+export default function DashboardClient({ user, characterName, avatarEmoji, scenarios, progress, unmastered, mastered }: Props) {
+  void user
   const router = useRouter()
   const supabase = createClient()
 
@@ -45,16 +48,16 @@ export default function DashboardClient({ user, scenarios, progress, unmastered,
       <header className="shrink-0 border-b border-gray-800/50 px-5 py-3.5 flex items-center justify-between bg-gray-950 z-10">
         <div className="flex items-center gap-2">
           <span className="text-lg">✈️</span>
-          <span className="font-black text-white tracking-widest text-sm uppercase">TravelSpeak</span>
+          <span className="font-black text-white tracking-widest text-sm uppercase">Scene Quest</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Level badge */}
           <Link
             href="/profile"
-            className="flex items-center gap-1.5 bg-amber-900/20 border border-amber-700/30 rounded-full px-3 py-1 hover:border-amber-500/50 transition-colors"
+            className="flex items-center gap-2 bg-white/5 border border-white/10 hover:border-amber-500/40 rounded-full pl-1.5 pr-3 py-1 transition-colors"
           >
-            <span className="text-sm">{levelInfo.emoji}</span>
-            <span className="text-amber-400 text-xs font-bold">Lv.{levelInfo.level}</span>
+            <span className="text-base leading-none">{avatarEmoji}</span>
+            <span className="text-white/70 text-xs font-bold">{characterName}</span>
+            <span className="text-amber-400 text-xs font-bold ml-0.5">Lv.{levelInfo.level}</span>
           </Link>
           <button onClick={signOut} className="text-gray-600 hover:text-gray-400 text-xs transition-colors">
             Exit

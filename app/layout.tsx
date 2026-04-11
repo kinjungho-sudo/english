@@ -5,10 +5,10 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
-  title: 'TravelSpeak — AI English RPG',
-  description: '영어 여행 회화를 게임처럼 배우는 AI 학습 앱',
+  title: 'Scene Quest — AI 여행 영어 게임',
+  description: '여행 실전 상황을 직접 말하며 영어를 배우는 AI 게임형 학습 도구',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'TravelSpeak' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Scene Quest' },
 }
 
 export const viewport: Viewport = {

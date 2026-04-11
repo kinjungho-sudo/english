@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -7,25 +8,85 @@ import { getLevelInfo, calculateXP, LEVELS } from '@/lib/levels'
 import type { UserProgress, UserMistake, Scenario } from '@/lib/scenarios/data'
 import type { User } from '@supabase/supabase-js'
 
+type Profile = {
+  character_name: string
+  avatar_emoji: string
+  difficulty: string
+  tts_autoplay: boolean
+  hint_enabled: boolean
+}
+
 type Props = {
   user: User
+  profile: Profile
   progress: UserProgress[]
   mastered: UserMistake[]
   unmastered: UserMistake[]
   scenarios: Scenario[]
 }
 
-export default function ProfileClient({ user, progress, mastered, unmastered, scenarios }: Props) {
+const AVATARS = ['🧑‍💼', '👩‍✈️', '🧑‍🍳', '🧝', '🦸', '🧙', '👨‍🎓', '🧑‍🚀']
+
+const DIFFICULTIES = [
+  { key: 'easy',   label: 'EASY',   desc: '문법 오류 관대히 처리',  color: 'text-green-400',  border: 'border-green-600/40', bg: 'bg-green-900/20' },
+  { key: 'normal', label: 'NORMAL', desc: '표준 평가 기준',         color: 'text-amber-400',  border: 'border-amber-600/40', bg: 'bg-amber-900/20' },
+  { key: 'hard',   label: 'HARD',   desc: '정확한 표현만 정답',     color: 'text-red-400',    border: 'border-red-600/40',   bg: 'bg-red-900/20' },
+]
+
+export default function ProfileClient({ user, profile, progress, mastered, unmastered, scenarios }: Props) {
+  void user
   const router = useRouter()
   const supabase = createClient()
+
+  const [characterName, setCharacterName] = useState(profile.character_name)
+  const [avatarEmoji, setAvatarEmoji] = useState(profile.avatar_emoji)
+  const [difficulty, setDifficulty] = useState(profile.difficulty)
+  const [ttsAutoplay, setTtsAutoplay] = useState(profile.tts_autoplay)
+  const [hintEnabled, setHintEnabled] = useState(profile.hint_enabled)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(profile.character_name)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
 
   const totalScore = progress.reduce((sum, p) => sum + (p.total_score ?? 0), 0)
   const masteredCount = mastered.length
   const completedCount = progress.filter(p => !!p.completed_at).length
   const xp = calculateXP(totalScore, masteredCount, completedCount)
   const levelInfo = getLevelInfo(xp)
-
   const scenarioMap = Object.fromEntries(scenarios.map(s => [s.id, s]))
+
+  async function saveProfile(patch: Partial<Profile>) {
+    setSaving(true)
+    await supabase.from('profiles').update(patch).eq('id', (await supabase.auth.getUser()).data.user!.id)
+    setSaving(false)
+    setSaveMsg('저장됨')
+    setTimeout(() => setSaveMsg(''), 2000)
+  }
+
+  async function handleNameSave() {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed.length < 2) return
+    setCharacterName(trimmed)
+    setEditingName(false)
+    await saveProfile({ character_name: trimmed })
+    router.refresh()
+  }
+
+  async function handleAvatarChange(emoji: string) {
+    setAvatarEmoji(emoji)
+    await saveProfile({ avatar_emoji: emoji })
+  }
+
+  async function handleDifficultyChange(d: string) {
+    setDifficulty(d)
+    await saveProfile({ difficulty: d })
+  }
+
+  async function handleToggle(key: 'tts_autoplay' | 'hint_enabled', val: boolean) {
+    if (key === 'tts_autoplay') setTtsAutoplay(val)
+    else setHintEnabled(val)
+    await saveProfile({ [key]: val })
+  }
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -36,174 +97,269 @@ export default function ProfileClient({ user, progress, mastered, unmastered, sc
   return (
     <div className="game-wrap bg-gray-950">
       <div className="game-card bg-gray-950">
-      {/* Header */}
-      <header className="shrink-0 border-b border-gray-800/50 px-5 py-4 flex items-center justify-between bg-gray-950 z-10">
-        <Link href="/dashboard" className="text-gray-600 hover:text-gray-400 text-sm transition-colors">
-          ← Dashboard
-        </Link>
-        <span className="text-xs text-gray-600 tracking-widest uppercase">My Page</span>
-        <button onClick={signOut} className="text-gray-600 hover:text-red-400 text-xs transition-colors">
-          Sign out
-        </button>
-      </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-8 space-y-5">
+        {/* Header */}
+        <header className="shrink-0 border-b border-gray-800/50 px-5 py-4 flex items-center justify-between bg-gray-950 z-10">
+          <Link href="/dashboard" className="text-gray-600 hover:text-gray-400 text-sm transition-colors">
+            ← Dashboard
+          </Link>
+          <span className="text-[11px] text-gray-600 tracking-widest uppercase">My Page</span>
+          <button onClick={signOut} className="text-gray-600 hover:text-red-400 text-xs transition-colors">
+            Sign out
+          </button>
+        </header>
 
-        {/* Level Card — hero */}
-        <div
-          className="rounded-2xl p-6 relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(10,10,15,0.9) 60%)',
-            border: '1px solid rgba(245,158,11,0.2)',
-            boxShadow: '0 0 40px rgba(245,158,11,0.06)',
-          }}
-        >
-          {/* Glow */}
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full pointer-events-none"
-            style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)' }} />
+        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
 
-          <div className="flex items-start justify-between mb-5">
-            <div>
-              <p className="text-xs text-amber-600/60 tracking-widest uppercase font-medium mb-1">
-                LEVEL {levelInfo.level}
-              </p>
-              <h2 className="text-2xl font-black text-white" style={{ letterSpacing: '-0.02em' }}>
-                {levelInfo.emoji} {levelInfo.title}
-              </h2>
-              <p className="text-gray-500 text-sm mt-1 truncate max-w-[200px]">
-                {user.email}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-black text-amber-400">{levelInfo.level}</div>
-              <div className="text-xs text-gray-600 uppercase tracking-wider">LV</div>
-            </div>
-          </div>
+          {/* ── 캐릭터 카드 ── */}
+          <div
+            className="rounded-2xl p-5 relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(168,85,247,0.1) 0%, rgba(10,10,15,0.95) 60%)',
+              border: '1px solid rgba(168,85,247,0.18)',
+              boxShadow: '0 0 40px rgba(168,85,247,0.05)',
+            }}
+          >
+            <div className="flex items-center gap-4">
+              {/* 아바타 */}
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shrink-0"
+                style={{
+                  background: 'radial-gradient(circle, rgba(168,85,247,0.15), rgba(0,0,0,0.5))',
+                  border: '1.5px solid rgba(168,85,247,0.25)',
+                }}
+              >
+                {avatarEmoji}
+              </div>
 
-          {/* XP Bar */}
-          <div className="mb-2">
-            <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-gray-500">{xp.toLocaleString()} XP</span>
-              {levelInfo.nextLevel ? (
-                <span className="text-gray-600">{levelInfo.nextLevel.minXP.toLocaleString()} XP</span>
-              ) : (
-                <span className="text-amber-500 font-bold">MAX LEVEL</span>
+              <div className="flex-1 min-w-0">
+                {editingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      maxLength={16}
+                      value={nameInput}
+                      onChange={e => setNameInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false) }}
+                      className="bg-white/8 border border-white/15 rounded-lg px-3 py-1.5 text-white text-base font-bold focus:outline-none w-36"
+                    />
+                    <button onClick={handleNameSave} className="text-purple-400 text-xs font-bold hover:text-purple-300">저장</button>
+                    <button onClick={() => setEditingName(false)} className="text-gray-600 text-xs hover:text-gray-400">취소</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-white">{characterName}</h2>
+                    <button onClick={() => { setNameInput(characterName); setEditingName(true) }} className="text-gray-600 hover:text-purple-400 transition-colors text-xs">✎</button>
+                  </div>
+                )}
+                <p className="text-[11px] text-purple-400/60 font-bold tracking-widest uppercase mt-0.5">
+                  {levelInfo.emoji} Lv.{levelInfo.level} · {levelInfo.title}
+                </p>
+              </div>
+
+              {saveMsg && (
+                <span className="text-green-400/70 text-xs shrink-0">{saveMsg}</span>
               )}
             </div>
-            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${levelInfo.progress}%`,
-                  background: 'linear-gradient(90deg, #d97706, #f59e0b)',
-                  boxShadow: '0 0 8px rgba(245,158,11,0.4)',
-                }}
-              />
+
+            {/* 아바타 선택 */}
+            <div className="mt-4 grid grid-cols-8 gap-1.5">
+              {AVATARS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => handleAvatarChange(emoji)}
+                  className={`aspect-square rounded-xl text-xl flex items-center justify-center transition-all ${
+                    avatarEmoji === emoji
+                      ? 'bg-purple-600/30 border border-purple-500/50 scale-110'
+                      : 'bg-white/5 border border-white/5 hover:bg-white/10 hover:scale-105'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* XP 바 */}
+            <div className="mt-4">
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="text-gray-500">{xp.toLocaleString()} XP</span>
+                {levelInfo.nextLevel
+                  ? <span className="text-gray-600">다음 레벨까지 {(levelInfo.nextLevel.minXP - xp).toLocaleString()} XP</span>
+                  : <span className="text-purple-400 font-bold">MAX LEVEL</span>
+                }
+              </div>
+              <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${levelInfo.progress}%`,
+                    background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
+                    boxShadow: '0 0 8px rgba(168,85,247,0.4)',
+                  }}
+                />
+              </div>
             </div>
           </div>
-          {levelInfo.nextLevel && (
-            <p className="text-xs text-gray-700">
-              다음 레벨까지 {(levelInfo.nextLevel.minXP - xp).toLocaleString()} XP
-            </p>
-          )}
-        </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'TOTAL SCORE', value: totalScore.toLocaleString(), icon: '⭐' },
-            { label: 'MASTERED', value: masteredCount, icon: '✓' },
-            { label: 'COMPLETED', value: `${completedCount}/${scenarios.length}`, icon: '🏁' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
-              <div className="text-xl mb-1">{stat.icon}</div>
-              <div className="text-white font-black text-lg">{stat.value}</div>
-              <div className="text-gray-600 text-xs tracking-wider mt-0.5">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Level Road Map */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <h3 className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">LEVEL ROAD MAP</h3>
-          <div className="space-y-2.5">
-            {LEVELS.map(l => {
-              const isUnlocked = xp >= l.minXP
-              const isCurrent = l.level === levelInfo.level
-              return (
-                <div key={l.level} className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
-                  isCurrent ? 'bg-amber-900/20 border border-amber-700/30' : 'border border-transparent'
-                }`}>
-                  <div className={`text-xl ${isUnlocked ? '' : 'grayscale opacity-30'}`}>{l.emoji}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold ${isCurrent ? 'text-amber-400' : isUnlocked ? 'text-white' : 'text-gray-700'}`}>
-                        Lv.{l.level} {l.title}
-                      </span>
-                      {isCurrent && <span className="text-xs bg-amber-900/50 text-amber-400 border border-amber-700/40 rounded px-1.5 py-0.5">NOW</span>}
-                    </div>
-                    <div className="text-xs text-gray-600">{l.minXP.toLocaleString()} XP~</div>
-                  </div>
-                  {isUnlocked && !isCurrent && (
-                    <span className="text-green-500 text-sm">✓</span>
-                  )}
-                  {!isUnlocked && (
-                    <span className="text-gray-700 text-sm">🔒</span>
-                  )}
-                </div>
-              )
-            })}
+          {/* ── 스탯 ── */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'SCORE', value: totalScore.toLocaleString(), icon: '⭐' },
+              { label: 'MASTERED', value: masteredCount, icon: '✓' },
+              { label: 'CLEARED', value: `${completedCount}/${scenarios.length}`, icon: '🏁' },
+            ].map(stat => (
+              <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-3.5 text-center">
+                <div className="text-lg mb-1">{stat.icon}</div>
+                <div className="text-white font-black text-base">{stat.value}</div>
+                <div className="text-gray-600 text-[10px] tracking-wider mt-0.5">{stat.label}</div>
+              </div>
+            ))}
           </div>
-        </div>
 
-        {/* Mastered Expressions */}
-        {mastered.length > 0 && (
+          {/* ── 게임 난이도 ── */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-            <h3 className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">
-              MASTERED EXPRESSIONS ({mastered.length})
-            </h3>
+            <h3 className="text-[11px] text-gray-500 uppercase tracking-widest font-bold mb-3">DIFFICULTY</h3>
             <div className="space-y-2">
-              {mastered.slice(0, 10).map(m => (
-                <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
-                  <span className="text-green-500 text-xs mt-0.5">✓</span>
-                  <div>
-                    <p className="text-green-300 text-sm font-medium">"{m.correct_expression}"</p>
-                    {m.context && <p className="text-gray-600 text-xs mt-0.5">{m.context.slice(0, 60)}...</p>}
+              {DIFFICULTIES.map(d => (
+                <button
+                  key={d.key}
+                  onClick={() => handleDifficultyChange(d.key)}
+                  disabled={saving}
+                  className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 border transition-all text-left ${
+                    difficulty === d.key
+                      ? `${d.bg} ${d.border}`
+                      : 'border-transparent hover:bg-white/4'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${difficulty === d.key ? d.color.replace('text-', 'bg-') : 'bg-gray-700'}`} />
+                  <div className="flex-1">
+                    <p className={`text-xs font-black tracking-widest ${difficulty === d.key ? d.color : 'text-gray-500'}`}>
+                      {d.label}
+                    </p>
+                    <p className="text-gray-600 text-[11px] mt-0.5">{d.desc}</p>
                   </div>
+                  {difficulty === d.key && <span className={`text-xs ${d.color}`}>✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 게임 설정 ── */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+            <h3 className="text-[11px] text-gray-500 uppercase tracking-widest font-bold mb-3">SETTINGS</h3>
+            <div className="space-y-0 divide-y divide-gray-800/60">
+              {[
+                {
+                  key: 'tts_autoplay' as const,
+                  label: 'TTS 자동 재생',
+                  desc: 'NPC 대사 타이핑 완료 시 자동 음성 재생',
+                  value: ttsAutoplay,
+                },
+                {
+                  key: 'hint_enabled' as const,
+                  label: '힌트 버튼',
+                  desc: '게임 화면에 힌트 보기 버튼 표시',
+                  value: hintEnabled,
+                },
+              ].map(setting => (
+                <div key={setting.key} className="flex items-center justify-between py-3.5">
+                  <div>
+                    <p className="text-white/80 text-sm font-medium">{setting.label}</p>
+                    <p className="text-gray-600 text-xs mt-0.5">{setting.desc}</p>
+                  </div>
+                  <button
+                    onClick={() => handleToggle(setting.key, !setting.value)}
+                    disabled={saving}
+                    className={`w-11 h-6 rounded-full transition-all relative shrink-0 ml-4 ${
+                      setting.value ? 'bg-amber-500' : 'bg-gray-700'
+                    }`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${
+                      setting.value ? 'left-[22px]' : 'left-0.5'
+                    }`} />
+                  </button>
                 </div>
               ))}
-              {mastered.length > 10 && (
-                <p className="text-gray-600 text-xs text-center pt-2">+{mastered.length - 10}개 더</p>
-              )}
             </div>
           </div>
-        )}
 
-        {/* Unmastered */}
-        {unmastered.length > 0 && (
+          {/* ── 레벨 로드맵 ── */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-            <h3 className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">
-              REVIEW NEEDED ({unmastered.length})
-            </h3>
+            <h3 className="text-[11px] text-gray-500 uppercase tracking-widest font-bold mb-4">LEVEL ROAD MAP</h3>
             <div className="space-y-2">
-              {unmastered.slice(0, 5).map(m => {
-                const scenario = scenarioMap[m.scenario_id]
+              {LEVELS.map(l => {
+                const isUnlocked = xp >= l.minXP
+                const isCurrent = l.level === levelInfo.level
                 return (
-                  <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
-                    <span className="text-amber-500 text-xs mt-0.5">△</span>
-                    <div>
-                      <p className="text-amber-200 text-sm">"{m.correct_expression}"</p>
-                      <p className="text-gray-600 text-xs">{scenario?.name} · {m.mistake_count}회 틀림</p>
+                  <div key={l.level} className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
+                    isCurrent ? 'bg-amber-900/20 border border-amber-700/30' : 'border border-transparent'
+                  }`}>
+                    <div className={`text-xl ${isUnlocked ? '' : 'grayscale opacity-30'}`}>{l.emoji}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold ${isCurrent ? 'text-amber-400' : isUnlocked ? 'text-white' : 'text-gray-700'}`}>
+                          Lv.{l.level} {l.title}
+                        </span>
+                        {isCurrent && <span className="text-[10px] bg-amber-900/50 text-amber-400 border border-amber-700/40 rounded px-1.5 py-0.5">NOW</span>}
+                      </div>
+                      <div className="text-xs text-gray-600">{l.minXP.toLocaleString()} XP~</div>
                     </div>
+                    {isUnlocked && !isCurrent && <span className="text-green-500 text-sm">✓</span>}
+                    {!isUnlocked && <span className="text-gray-700 text-sm">🔒</span>}
                   </div>
                 )
               })}
             </div>
           </div>
-        )}
 
-        <div className="pb-8" />
-      </div>
+          {/* ── 마스터된 표현 ── */}
+          {mastered.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+              <h3 className="text-[11px] text-gray-500 uppercase tracking-widest font-bold mb-4">
+                MASTERED ({mastered.length})
+              </h3>
+              <div className="space-y-2">
+                {mastered.slice(0, 10).map(m => (
+                  <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
+                    <span className="text-green-500 text-xs mt-0.5">✓</span>
+                    <div>
+                      <p className="text-green-300 text-sm font-medium">"{m.correct_expression}"</p>
+                      {m.context && <p className="text-gray-600 text-xs mt-0.5">{m.context.slice(0, 60)}…</p>}
+                    </div>
+                  </div>
+                ))}
+                {mastered.length > 10 && (
+                  <p className="text-gray-600 text-xs text-center pt-2">+{mastered.length - 10}개 더</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── 복습 필요 ── */}
+          {unmastered.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+              <h3 className="text-[11px] text-gray-500 uppercase tracking-widest font-bold mb-4">
+                REVIEW NEEDED ({unmastered.length})
+              </h3>
+              <div className="space-y-2">
+                {unmastered.slice(0, 5).map(m => {
+                  const scenario = scenarioMap[m.scenario_id]
+                  return (
+                    <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
+                      <span className="text-amber-500 text-xs mt-0.5">△</span>
+                      <div>
+                        <p className="text-amber-200 text-sm">"{m.correct_expression}"</p>
+                        <p className="text-gray-600 text-xs">{scenario?.name} · {m.mistake_count}회 틀림</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="pb-6" />
+        </div>
       </div>
     </div>
   )

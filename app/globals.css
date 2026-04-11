@@ -6,11 +6,11 @@
 
 /* ===== 반응형 게임 레이아웃 ===== */
 
-/* 모바일: 전체 화면 / 태블릿·데스크탑: 중앙 카드 */
 .game-wrap {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+  background: #000;
 }
 
 .game-card {
@@ -19,6 +19,7 @@
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  background: #000;
 }
 
 @media (min-width: 640px) {
@@ -27,7 +28,6 @@
     justify-content: center;
     flex-direction: row;
     padding: 2rem 1rem;
-    background: #000;
   }
   .game-card {
     flex: none;
@@ -36,32 +36,110 @@
     height: calc(100svh - 4rem);
     max-height: 812px;
     min-height: 600px;
-    border-radius: 24px;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 100px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.5);
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      0 0 80px rgba(0, 0, 0, 0.95),
+      0 0 200px rgba(0, 0, 0, 0.8);
   }
+}
+
+/* ===== 대화 박스 (글래스모피즘) ===== */
+.dialogue-box {
+  background: rgba(4, 4, 8, 0.86);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* NPC별 테마 */
+.dialogue-box-SARAH {
+  border-color: rgba(251, 146, 60, 0.22);
+  box-shadow: 0 0 40px rgba(251, 146, 60, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-SARAH { background: #ea580c; }
+
+.dialogue-box-MIKE {
+  border-color: rgba(96, 165, 250, 0.22);
+  box-shadow: 0 0 40px rgba(96, 165, 250, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-MIKE { background: #2563eb; }
+
+.dialogue-box-EMMA {
+  border-color: rgba(192, 132, 252, 0.22);
+  box-shadow: 0 0 40px rgba(192, 132, 252, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-EMMA { background: #7c3aed; }
+
+/* Player input box */
+.dialogue-box-player {
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 게임 인풋 포커스 글로우 ===== */
+.game-input {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  transition: none;
+}
+.game-input::placeholder { color: rgba(255, 255, 255, 0.2); }
+.game-input:focus { outline: none; }
+.game-input:focus ~ .game-input-glow { opacity: 1; }
+
+/* ===== 진행도 세그먼트 ===== */
+.progress-seg {
+  height: 3px;
+  width: 20px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.4s ease;
+}
+.progress-seg.done  { background: #f59e0b; }
+.progress-seg.active {
+  background: rgba(245, 158, 11, 0.5);
+  animation: segPulse 1.2s ease-in-out infinite;
 }
 
 /* ===== 애니메이션 ===== */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes resultSlideUp {
+  from { opacity: 0; transform: translateY(40px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes scoreCount {
-  from { transform: scale(1.4); color: #f59e0b; }
-  to   { transform: scale(1);   color: inherit; }
+  0%   { opacity: 0; transform: scale(1.6) translateY(-4px); }
+  60%  { transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes twinkle {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.7; }
+@keyframes segPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
 }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.4s ease-out forwards;
+@keyframes correctFlash {
+  0%   { background: rgba(74, 222, 128, 0.15); }
+  100% { background: transparent; }
 }
 
-.animate-score-pop {
-  animation: scoreCount 0.5s ease-out;
+@keyframes typewriterBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
 }
+
+.animate-fade-in-up    { animation: fadeInUp 0.25s ease-out forwards; }
+.animate-result-slide  { animation: resultSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.animate-score-pop     { animation: scoreCount 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-correct-flash { animation: correctFlash 0.8s ease-out forwards; }
+.animate-cursor        { animation: typewriterBlink 0.7s step-end infinite; }

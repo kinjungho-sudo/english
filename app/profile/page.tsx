@@ -8,11 +8,13 @@ export default async function ProfilePage() {
   if (!user) redirect('/')
 
   const [
+    { data: profile },
     { data: progress },
     { data: mastered },
     { data: allMistakes },
     { data: scenarios },
   ] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
     supabase.from('user_progress').select('*').eq('user_id', user.id),
     supabase.from('user_mistakes').select('*').eq('user_id', user.id).not('mastered_at', 'is', null),
     supabase.from('user_mistakes').select('*').eq('user_id', user.id).is('mastered_at', null),
@@ -22,6 +24,7 @@ export default async function ProfilePage() {
   return (
     <ProfileClient
       user={user}
+      profile={profile ?? { character_name: '', avatar_emoji: '🧑‍💼', difficulty: 'normal', tts_autoplay: true, hint_enabled: true }}
       progress={progress ?? []}
       mastered={mastered ?? []}
       unmastered={allMistakes ?? []}

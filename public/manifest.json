@@ -1,7 +1,7 @@
 {
-  "name": "TravelSpeak — AI English RPG",
-  "short_name": "TravelSpeak",
-  "description": "영어 여행 회화를 게임처럼 배우는 AI 학습 앱",
+  "name": "Scene Quest — AI 여행 영어 게임",
+  "short_name": "Scene Quest",
+  "description": "여행 실전 상황을 직접 말하며 영어를 배우는 AI 게임형 학습 도구",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

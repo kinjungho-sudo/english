@@ -8,7 +8,7 @@ export default async function ScenarioPage({ params }: { params: Promise<{ id: s
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/')
 
-  const [{ data: scenario }, { data: steps }, { data: mistakes }] = await Promise.all([
+  const [{ data: scenario }, { data: steps }, { data: mistakes }, { data: profile }] = await Promise.all([
     supabase.from('scenarios').select('*').eq('id', id).single(),
     supabase.from('dialogue_steps').select('*').eq('scenario_id', id).order('step_order'),
     supabase
@@ -17,6 +17,7 @@ export default async function ScenarioPage({ params }: { params: Promise<{ id: s
       .eq('user_id', user.id)
       .eq('scenario_id', id)
       .is('mastered_at', null),
+    supabase.from('profiles').select('character_name, avatar_emoji').eq('id', user.id).single(),
   ])
 
   if (!scenario || !steps?.length) redirect('/dashboard')
@@ -29,6 +30,8 @@ export default async function ScenarioPage({ params }: { params: Promise<{ id: s
       steps={steps}
       userId={user.id}
       mistakeStepIds={mistakeStepIds}
+      characterName={profile?.character_name ?? ''}
+      avatarEmoji={profile?.avatar_emoji ?? '🧑‍💼'}
     />
   )
 }
