@@ -15,7 +15,16 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: 'user',
-        content: `Translate the following English sentence into natural Korean. Return ONLY the Korean translation, no explanation.\n\n"${text}"`,
+        content: `여행 영어 학습 앱에서 NPC의 대사를 한국어로 보여주려 합니다.
+아래 영어 문장을 자연스러운 한국어로 번역해 주세요.
+
+번역 원칙:
+- 직역 금지 — 한국인이 실제로 쓰는 자연스러운 말투로
+- 상황: 레스토랑/공항/호텔 직원이 손님에게 하는 말
+- 존댓말 유지, 짧고 자연스럽게
+- 번역문만 출력 (설명 없이)
+
+"${text}"`,
       },
     ],
   })

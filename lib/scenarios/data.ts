@@ -48,6 +48,7 @@ export type AIEvaluation = {
   correction: string | null
   correct_expression: string
   needs_retry: boolean
+  npc_response: string
 }
 
 // Fallback static data (used when DB is unavailable)

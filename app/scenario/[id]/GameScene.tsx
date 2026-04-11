@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import NPCDialogue from '@/components/NPCDialogue'
@@ -8,6 +8,7 @@ import UserInput from '@/components/UserInput'
 import { getSceneUrl, getCharacterUrl, scoreToExpression } from '@/lib/assets'
 import type { Scenario, DialogueStep } from '@/lib/scenarios/data'
 import type { Expression } from '@/lib/assets'
+import type { ChatMessage } from '@/app/api/chat/route'
 
 type Props = {
   scenario: Scenario
@@ -30,6 +31,16 @@ const NPC_EMOJI: Record<string, string> = {
   EMMA:  '👩‍💼',
 }
 
+const MAX_ATTEMPTS = 3
+
+function getReaction(pts: number): { label: string; color: string } | null {
+  if (pts >= 90) return { label: 'Perfect! ✨', color: '#f59e0b' }
+  if (pts >= 70) return { label: 'Great! 👍',   color: '#34d399' }
+  if (pts >= 50) return { label: 'Good! 😊',    color: '#60a5fa' }
+  if (pts >= 30) return { label: 'Nice try!',   color: '#fb923c' }
+  return null
+}
+
 export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji }: Props) {
   void userId
   const router = useRouter()
@@ -46,6 +57,20 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   const [sceneError, setSceneError] = useState(false)
   const [charError, setCharError] = useState(false)
 
+  // Hybrid multi-turn state
+  const [convHistory, setConvHistory] = useState<ChatMessage[]>([])
+  const [attempt, setAttempt] = useState(0)
+  const [npcResponse, setNpcResponse] = useState<string | null>(null)
+  const [pendingAdvance, setPendingAdvance] = useState(false)
+  const [lastFeedback, setLastFeedback] = useState<string | null>(null)
+  const [lastCorrection, setLastCorrection] = useState<string | null>(null)
+  const [lastGoalAchieved, setLastGoalAchieved] = useState(false)
+  const [scorePopup, setScorePopup] = useState<{ label: string; pts: number; color: string } | null>(null)
+
+  const pendingScoreRef = useRef(0)
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const advancedRef = useRef(false)
+
   const currentStep = orderedSteps[currentIndex]
   const isLastStep = currentIndex === orderedSteps.length - 1
   const fallbackGradient = SCENE_FALLBACK_GRADIENT[scenario.id] ?? 'from-gray-900 to-black'
@@ -61,10 +86,38 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     })
   }, [scenario.id])
 
-  function goNext(newScore: number) {
+  function resetStepState() {
+    setConvHistory([])
+    setAttempt(0)
+    setNpcResponse(null)
+    setPendingAdvance(false)
+    setLastFeedback(null)
+    setLastCorrection(null)
+    setLastGoalAchieved(false)
     setExpression('neutral')
     setSceneError(false)
     setCharError(false)
+  }
+
+  function handleNPCResponseEnd() {
+    if (advancedRef.current) return
+    advancedRef.current = true
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current)
+      fallbackTimerRef.current = null
+    }
+    setNpcResponse(null)
+
+    if (pendingAdvance) {
+      goNext(pendingScoreRef.current)
+    } else {
+      // Stay on same step — re-enable input by resetting advancedRef
+      advancedRef.current = false
+    }
+  }
+
+  function goNext(newScore: number) {
+    resetStepState()
     if (isLastStep) {
       saveProgress(orderedSteps.length, newScore, true)
       router.push(`/result/${scenario.id}?score=${newScore}&steps=${orderedSteps.length}`)
@@ -77,32 +130,77 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
   async function handleSubmit(userInput: string) {
     setLoading(true)
-    let newScore = score
+    advancedRef.current = false
+    const nextAttempt = attempt + 1
+
     try {
-      const res = await fetch('/api/evaluate', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userInput,
-          npcLine: currentStep.npc_line,
-          hintTemplate: currentStep.hint_template,
-          expectedKeywords: currentStep.expected_keywords,
+          conversationHistory: convHistory,
           stepId: currentStep.id,
           scenarioId: scenario.id,
+          expectedKeywords: currentStep.expected_keywords,
+          hintTemplate: currentStep.hint_template,
+          npcName: scenario.npc_name,
+          scenarioLocation: scenario.location,
+          attempt: nextAttempt,
+          maxAttempts: MAX_ATTEMPTS,
         }),
       })
+
       const data = await res.json()
-      newScore = score + (data.score ?? 50)
+      const pts = data.score ?? 50
+      const newScore = score + pts
       setScore(newScore)
-      setExpression(scoreToExpression(data.score ?? 50, data.is_correct ?? true))
-      setSceneError(false)
-      setCharError(false)
+      pendingScoreRef.current = newScore
+      setExpression(scoreToExpression(pts, data.goalAchieved ?? true))
+      setLastFeedback(data.feedback ?? null)
+      setLastCorrection(data.correction ?? null)
+      setLastGoalAchieved(data.goalAchieved ?? false)
+      setAttempt(nextAttempt)
+
+      // Update conversation history
+      setConvHistory(prev => [
+        ...prev,
+        { role: 'user', content: userInput },
+        ...(data.npcResponse ? [{ role: 'npc' as const, content: data.npcResponse }] : []),
+      ])
+
+      const reaction = getReaction(pts)
+      if (reaction) {
+        setScorePopup({ label: reaction.label, pts, color: reaction.color })
+        setTimeout(() => setScorePopup(null), 1600)
+      }
+
+      if (data.npcResponse) {
+        setPendingAdvance(data.advanceToNext ?? false)
+        setNpcResponse(data.npcResponse)
+        fallbackTimerRef.current = setTimeout(() => {
+          fallbackTimerRef.current = null
+          if (!advancedRef.current) {
+            advancedRef.current = true
+            setNpcResponse(null)
+            if (data.advanceToNext) {
+              goNext(newScore)
+            } else {
+              advancedRef.current = false
+            }
+          }
+        }, 7000)
+      } else {
+        if (data.advanceToNext) {
+          setTimeout(() => goNext(newScore), 900)
+        }
+      }
     } catch {
-      newScore = score + 50
+      const newScore = score + 50
       setScore(newScore)
+      setTimeout(() => goNext(newScore), 900)
     }
     setLoading(false)
-    setTimeout(() => goNext(newScore), 900)
   }
 
   return (
@@ -121,10 +219,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
                 onError={() => setSceneError(true)}
                 priority
               />
-              {/* 상단: HUD 가독성 */}
               <div className="absolute inset-x-0 top-0 h-32"
                 style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)' }} />
-              {/* 하단: 대사 박스 가독성 */}
               <div className="absolute inset-x-0 bottom-0 h-2/3"
                 style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.97) 30%, rgba(0,0,0,0.6) 65%, transparent 100%)' }} />
             </>
@@ -154,11 +250,33 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
           )}
         </div>
 
+        {/* ── 점수 반응 팝업 ── */}
+        {scorePopup && (
+          <div className="absolute inset-0 z-30 pointer-events-none">
+            <div
+              className="animate-reaction-pop absolute top-1/2 left-1/2 flex flex-col items-center gap-1"
+              style={{ color: scorePopup.color }}
+            >
+              <span
+                className="font-black leading-none"
+                style={{ fontSize: '2.6rem', textShadow: `0 0 32px ${scorePopup.color}88, 0 2px 8px rgba(0,0,0,0.8)` }}
+              >
+                {scorePopup.label}
+              </span>
+              <span
+                className="font-black text-xl tracking-wider"
+                style={{ textShadow: `0 0 16px ${scorePopup.color}66, 0 2px 6px rgba(0,0,0,0.8)` }}
+              >
+                +{scorePopup.pts} pts
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* ── 상단 HUD ── */}
         <div className="relative z-10 shrink-0 px-5 pt-5 pb-2">
           <div className="flex items-center justify-between gap-3">
 
-            {/* 나가기 버튼 */}
             <button
               onClick={() => router.push('/dashboard')}
               className="flex items-center gap-1.5 text-white/35 hover:text-white/75 transition-colors group"
@@ -167,7 +285,6 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               <span className="text-[11px] font-bold tracking-widest uppercase">EXIT</span>
             </button>
 
-            {/* 진행도 세그먼트 바 */}
             <div className="flex items-center gap-[3px]">
               {orderedSteps.map((_, i) => (
                 <div
@@ -177,14 +294,12 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               ))}
             </div>
 
-            {/* 점수 배지 */}
             <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1.5">
               <span className="text-amber-400 text-[11px] leading-none">★</span>
               <span className="text-white/85 text-[11px] font-bold tabular-nums leading-none">{score}</span>
             </div>
           </div>
 
-          {/* 복습 뱃지 */}
           {mistakeStepIds.has(currentStep?.id) && (
             <div className="mt-3 inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1">
               <span className="text-amber-400 text-[11px]">🔄</span>
@@ -198,19 +313,70 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
         {/* ── 하단 대화 영역 ── */}
         <div className="relative z-10 shrink-0 px-4 pb-5 space-y-2">
-          <NPCDialogue
-            npcName={scenario.npc_name}
-            line={currentStep.npc_line}
-            ttsText={currentStep.tts_text}
-          />
-          <UserInput
-            hintTemplate={currentStep.hint_template}
-            onSubmit={handleSubmit}
-            loading={loading}
-            disabled={loading}
-            characterName={characterName}
-            avatarEmoji={avatarEmoji}
-          />
+
+          {/* 시도 횟수 도트 (첫 번째 시도 이후) */}
+          {attempt > 0 && !npcResponse && (
+            <div className="flex items-center justify-center gap-2">
+              {Array.from({ length: MAX_ATTEMPTS }, (_, i) => {
+                const isUsed = i < attempt
+                const isLast = i === attempt - 1
+                const isDone = isLast && lastGoalAchieved
+                return (
+                  <div
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${
+                      isDone        ? 'bg-green-400 scale-125' :
+                      isUsed        ? 'bg-white/25' :
+                      i === attempt ? 'bg-amber-400 animate-pulse scale-110' :
+                                      'bg-white/10'
+                    }`}
+                  />
+                )
+              })}
+              <span className="text-white/25 text-[10px] ml-1 tracking-wide">
+                {attempt >= MAX_ATTEMPTS ? '마지막 시도' : `${attempt} / ${MAX_ATTEMPTS}`}
+              </span>
+            </div>
+          )}
+
+          {/* 이전 시도 피드백 (재시도 중일 때만 표시) */}
+          {lastFeedback && !npcResponse && attempt > 0 && attempt < MAX_ATTEMPTS && !lastGoalAchieved && (
+            <div className="rounded-xl px-4 py-2.5 space-y-1"
+              style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <p className="text-white/55 text-[12px] leading-relaxed">{lastFeedback}</p>
+              {lastCorrection && (
+                <p className="text-amber-400/65 text-[11px]">{lastCorrection}</p>
+              )}
+            </div>
+          )}
+
+          {/* NPC 대화 박스 */}
+          {npcResponse ? (
+            <NPCDialogue
+              npcName={scenario.npc_name}
+              line={npcResponse}
+              ttsText={npcResponse}
+              onTTSEnd={handleNPCResponseEnd}
+            />
+          ) : (
+            <NPCDialogue
+              npcName={scenario.npc_name}
+              line={currentStep.npc_line}
+              ttsText={currentStep.tts_text}
+            />
+          )}
+
+          {/* 유저 입력 */}
+          {!npcResponse && (
+            <UserInput
+              hintTemplate={currentStep.hint_template}
+              onSubmit={handleSubmit}
+              loading={loading}
+              disabled={loading}
+              characterName={characterName}
+              avatarEmoji={avatarEmoji}
+            />
+          )}
         </div>
 
       </div>

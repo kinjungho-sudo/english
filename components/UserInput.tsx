@@ -77,7 +77,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
 
     const recognition = new SR()
     recognition.lang = 'en-US'
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = true
 
     recognition.onstart = () => setListening(true)

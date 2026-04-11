@@ -143,3 +143,12 @@
 .animate-score-pop     { animation: scoreCount 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 .animate-correct-flash { animation: correctFlash 0.8s ease-out forwards; }
 .animate-cursor        { animation: typewriterBlink 0.7s step-end infinite; }
+
+@keyframes reactionPop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  40%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  60%  { transform: translate(-50%, -50%) scale(0.96); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+}
+.animate-reaction-pop { animation: reactionPop 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
