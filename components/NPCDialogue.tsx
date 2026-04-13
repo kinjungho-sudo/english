@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { applyNPCVoice } from '@/lib/npcVoices'
 
 type Props = {
   npcName: string
@@ -32,22 +31,31 @@ const NPC_BORDER: Record<string, string> = {
   CHEN:  'dialogue-box-CHEN',
 }
 
-const SPEEDS = [0.5, 0.75, 1.0, 1.5]
+const SPEEDS = [0.75, 1.0, 1.25, 1.5]
+
+// In-memory audio cache: cacheKey → object URL
+const audioCache = new Map<string, string>()
+
+function cacheKey(text: string, npcName: string) {
+  return `${npcName}::${text}`
+}
 
 export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props) {
   const [displayed, setDisplayed] = useState('')
   const [done, setDone] = useState(false)
   const [rate, setRate] = useState(1.0)
   const rateRef = useRef(1.0)
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [showKorean, setShowKorean] = useState(false)
   const [korean, setKorean] = useState('')
   const [translateState, setTranslateState] = useState<TranslateState>('idle')
+  const [ttsLoading, setTtsLoading] = useState(false)
 
   const nameplateClass = NPC_NAMEPLATE[npcName] ?? 'bg-amber-600'
-  const borderClass = NPC_BORDER[npcName] ?? ''
+  const borderClass    = NPC_BORDER[npcName] ?? ''
+  const spokenText     = ttsText ?? line
 
-  // line 바뀌면 번역 캐시 초기화
+  // Reset translation cache on line change
   useEffect(() => {
     setShowKorean(false)
     setKorean('')
@@ -73,10 +81,15 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
     }
   }
 
-  // 타이핑 효과
+  // Typewriter effect
   useEffect(() => {
     setDisplayed('')
     setDone(false)
+    // Stop any playing audio when line changes
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
     let i = 0
     const timer = setInterval(() => {
       setDisplayed(line.slice(0, i + 1))
@@ -86,26 +99,61 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
     return () => clearInterval(timer)
   }, [line])
 
-  const speak = useCallback(() => {
-    if (!('speechSynthesis' in window)) return
+  // ── OpenAI TTS (server) with Web Speech fallback ──────────────────────────
+  const speakOpenAI = useCallback(async (speedMult: number) => {
+    const key = cacheKey(spokenText, npcName)
+
+    let blobUrl = audioCache.get(key)
+
+    if (!blobUrl) {
+      setTtsLoading(true)
+      try {
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: spokenText, npcName }),
+        })
+        if (!res.ok) throw new Error('TTS API failed')
+        const blob = await res.blob()
+        blobUrl = URL.createObjectURL(blob)
+        audioCache.set(key, blobUrl)
+      } catch {
+        return false // signal fallback needed
+      } finally {
+        setTtsLoading(false)
+      }
+    }
+
+    if (!blobUrl) return false
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
+    const audio = new Audio(blobUrl)
+    audio.playbackRate = speedMult
+    audio.onended = () => onTTSEnd?.()
+    audioRef.current = audio
+    await audio.play()
+    return true
+  }, [spokenText, npcName, onTTSEnd])
+
+  const speakWebSpeech = useCallback((speedMult: number) => {
+    if (!('speechSynthesis' in window)) { onTTSEnd?.(); return }
     window.speechSynthesis.cancel()
+    const utt = new SpeechSynthesisUtterance(spokenText)
+    utt.lang = 'en-US'
+    utt.rate = speedMult
+    utt.onend = () => onTTSEnd?.()
+    window.speechSynthesis.speak(utt)
+  }, [spokenText, onTTSEnd])
 
-    const doSpeak = () => {
-      const utt = new SpeechSynthesisUtterance(ttsText ?? line)
-      applyNPCVoice(utt, npcName, rateRef.current)
-      utt.onend = () => onTTSEnd?.()
-      utteranceRef.current = utt
-      window.speechSynthesis.speak(utt)
-    }
+  const speak = useCallback(async (speedMult?: number) => {
+    const mult = speedMult ?? rateRef.current
+    const ok = await speakOpenAI(mult)
+    if (!ok) speakWebSpeech(mult)
+  }, [speakOpenAI, speakWebSpeech])
 
-    // Voices may not be loaded yet on first call — wait for voiceschanged
-    if (window.speechSynthesis.getVoices().length > 0) {
-      doSpeak()
-    } else {
-      window.speechSynthesis.addEventListener('voiceschanged', doSpeak, { once: true })
-    }
-  }, [ttsText, line, npcName, onTTSEnd])
-
+  // Auto-play when typewriter finishes
   useEffect(() => {
     if (done) speak()
   }, [done]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -113,9 +161,18 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
   function changeSpeed(s: number) {
     setRate(s)
     rateRef.current = s
-    // Re-speak with new speed if already done
-    if (utteranceRef.current && done) speak()
+    // Re-apply speed to currently playing audio
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.playbackRate = s
+    }
   }
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) audioRef.current.pause()
+    }
+  }, [])
 
   return (
     <div className={`dialogue-box ${borderClass} animate-fade-in-up`}>
@@ -123,6 +180,14 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
       {/* 네임플레이트 */}
       <div className={`${nameplateClass} px-4 py-1.5 flex items-center gap-2`}>
         <span className="text-white text-[11px] font-black tracking-[0.18em] uppercase">{npcName}</span>
+        {ttsLoading && (
+          <span className="ml-auto flex gap-0.5">
+            {[0,1,2].map(i => (
+              <span key={i} className="w-1 h-1 rounded-full bg-white/40 animate-bounce"
+                style={{ animationDelay: `${i * 120}ms` }} />
+            ))}
+          </span>
+        )}
       </div>
 
       {/* 대사 텍스트 */}
@@ -148,7 +213,7 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
 
           {/* 다시 듣기 */}
           <button
-            onClick={speak}
+            onClick={() => speak()}
             className="text-white/28 hover:text-white/65 transition-colors text-sm"
             title="다시 듣기"
           >
