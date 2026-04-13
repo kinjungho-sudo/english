@@ -161,6 +161,29 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
       const data = await res.json()
       const pts = data.score ?? 50
+
+      // Korean input: don't count as attempt, don't add to score
+      if (data.isKoreanInput) {
+        setLastFeedback(data.feedback ?? null)
+        setLastCorrection(data.correction ?? null)
+        setLastGoalAchieved(false)
+        setLastScore(0)
+        if (data.npcResponse) {
+          setPendingAdvance(false)
+          setNpcResponse(data.npcResponse)
+          fallbackTimerRef.current = setTimeout(() => {
+            fallbackTimerRef.current = null
+            if (!advancedRef.current) {
+              advancedRef.current = true
+              setNpcResponse(null)
+              advancedRef.current = false
+            }
+          }, 6000)
+        }
+        setLoading(false)
+        return
+      }
+
       const newScore = score + pts
       setScore(newScore)
       pendingScoreRef.current = newScore

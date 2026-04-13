@@ -43,6 +43,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing userInput' }, { status: 400 })
     }
 
+    // Korean input detection — encourage English without consuming an attempt
+    const hasKorean = /[\uac00-\ud7a3\u3131-\u318e]/.test(userInput)
+    if (hasKorean) {
+      const koreanNudges = [
+        "Oh, I think you meant to say that in English! Give it a try — I believe in you!",
+        "Hmm, let's try that in English! You can do it!",
+        "I heard you, but let's practice in English — that's what we're here for!",
+      ]
+      const npcResponse = koreanNudges[Math.floor(Math.random() * koreanNudges.length)]
+      return NextResponse.json({
+        goalAchieved: false,
+        score: 0,
+        npcResponse,
+        feedback: '영어로 말해봐요! 완벽하지 않아도 괜찮으니 영어로 도전해보세요 😊',
+        correction: hintTemplate ? `힌트: "${hintTemplate}"` : null,
+        naturalExpression: expectedKeywords?.[0] ?? '',
+        advanceToNext: false,
+        isKoreanInput: true,
+      })
+    }
+
     // Build conversation context for the prompt
     const historyText = conversationHistory
       .map(m => `${m.role === 'npc' ? npcName : 'Learner'}: ${m.content}`)
