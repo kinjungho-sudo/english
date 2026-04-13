@@ -350,6 +350,25 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             </div>
           )}
 
+          {/* 2회 이상 실패 시 힌트 + 넘어가기 */}
+          {attempt >= 2 && !npcResponse && !lastGoalAchieved && currentStep.hint_template && (
+            <div className="rounded-xl px-4 py-3 space-y-2.5 animate-fade-in-up"
+              style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}>
+              <div className="flex items-start gap-2">
+                <span className="text-[13px] opacity-40 shrink-0 mt-0.5">💡</span>
+                <p className="text-white/25 text-[13px] leading-relaxed tracking-wide select-none">
+                  {currentStep.hint_template}
+                </p>
+              </div>
+              <button
+                onClick={() => goNext(score)}
+                className="w-full py-2 rounded-lg text-[11px] font-bold tracking-widest uppercase transition-all text-white/20 hover:text-white/50 hover:bg-white/5"
+              >
+                읽었어요, 다음으로 →
+              </button>
+            </div>
+          )}
+
           {/* NPC 대화 박스 */}
           {npcResponse ? (
             <NPCDialogue
