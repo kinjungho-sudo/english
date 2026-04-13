@@ -17,7 +17,7 @@ export default async function ScenarioPage({ params }: { params: Promise<{ id: s
       .eq('user_id', user.id)
       .eq('scenario_id', id)
       .is('mastered_at', null),
-    supabase.from('profiles').select('character_name, avatar_emoji').eq('id', user.id).single(),
+    supabase.from('profiles').select('character_name, avatar_emoji, difficulty').eq('id', user.id).single(),
   ])
 
   if (!scenario || !steps?.length) redirect('/dashboard')
@@ -32,6 +32,7 @@ export default async function ScenarioPage({ params }: { params: Promise<{ id: s
       mistakeStepIds={mistakeStepIds}
       characterName={profile?.character_name ?? ''}
       avatarEmoji={profile?.avatar_emoji ?? '🧑‍💼'}
+      difficulty={profile?.difficulty ?? 'normal'}
     />
   )
 }

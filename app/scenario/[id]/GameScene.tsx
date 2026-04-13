@@ -17,6 +17,7 @@ type Props = {
   mistakeStepIds: Set<string>
   characterName?: string
   avatarEmoji?: string
+  difficulty?: string
 }
 
 const SCENE_FALLBACK_GRADIENT: Record<string, string> = {
@@ -48,7 +49,7 @@ function getReaction(pts: number): { label: string; color: string } | null {
   return            { label: 'Bad 😞',           color: '#f87171' }
 }
 
-export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji }: Props) {
+export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji, difficulty = 'normal' }: Props) {
   void userId
   const router = useRouter()
 
@@ -57,6 +58,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     ...steps.filter(s => !mistakeStepIds.has(s.id)),
   ]
 
+  const [showIntro, setShowIntro] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [score, setScore] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -73,6 +75,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   const [lastCorrection, setLastCorrection] = useState<string | null>(null)
   const [lastGoalAchieved, setLastGoalAchieved] = useState(false)
   const [lastScore, setLastScore] = useState<number | null>(null)
+  const [lastNaturalExpression, setLastNaturalExpression] = useState<string | null>(null)
   const [scorePopup, setScorePopup] = useState<{ label: string; pts: number; color: string } | null>(null)
 
   const pendingScoreRef = useRef(0)
@@ -113,6 +116,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     setLastCorrection(null)
     setLastGoalAchieved(false)
     setLastScore(null)
+    setLastNaturalExpression(null)
     setExpression('neutral')
     setSceneError(false)
     setCharError(false)
@@ -167,6 +171,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
           scenarioLocation: scenario.location,
           attempt: nextAttempt,
           maxAttempts: MAX_ATTEMPTS,
+          difficulty,
         }),
       })
 
@@ -203,6 +208,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
       setLastCorrection(data.correction ?? null)
       setLastGoalAchieved(data.goalAchieved ?? false)
       setLastScore(pts)
+      setLastNaturalExpression(data.naturalExpression ?? null)
       setAttempt(nextAttempt)
 
       // Update conversation history
@@ -249,6 +255,75 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   return (
     <div className="game-wrap">
       <div className="game-card">
+
+        {/* ── 시나리오 인트로 화면 ── */}
+        {showIntro && (
+          <div className={`absolute inset-0 z-50 flex flex-col bg-gradient-to-b ${fallbackGradient}`}>
+            {/* 상단 EXIT */}
+            <div className="shrink-0 px-5 pt-5">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-1.5 text-white/35 hover:text-white/75 transition-colors group"
+              >
+                <span className="text-sm group-hover:-translate-x-0.5 transition-transform">←</span>
+                <span className="text-[11px] font-bold tracking-widest uppercase">EXIT</span>
+              </button>
+            </div>
+
+            {/* NPC 이모지 */}
+            <div className="flex-1 flex items-center justify-center">
+              <span className="text-[96px] leading-none select-none opacity-80 drop-shadow-2xl">
+                {NPC_EMOJI[scenario.npc_name] ?? '🧑'}
+              </span>
+            </div>
+
+            {/* 인트로 정보 카드 */}
+            <div className="shrink-0 px-5 pb-8 space-y-4 animate-fade-in-up">
+              {/* 위치 레이블 */}
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(245,158,11,0.6)' }}>
+                {scenario.location}
+              </p>
+
+              {/* 시나리오 이름 */}
+              <div>
+                <h1 className="text-3xl font-black text-white leading-tight" style={{ letterSpacing: '-0.03em' }}>
+                  {scenario.thumbnail} {scenario.name}
+                </h1>
+                <p className="mt-2 text-sm" style={{ color: 'rgba(255,255,255,0.45)', lineHeight: '1.6' }}>
+                  {scenario.npc_personality}
+                </p>
+              </div>
+
+              {/* NPC 이름 배지 */}
+              <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <span className="text-sm">{NPC_EMOJI[scenario.npc_name] ?? '🧑'}</span>
+                <span className="text-xs font-bold text-white/60 tracking-wider uppercase">{scenario.npc_name}</span>
+              </div>
+
+              {/* 스텝 수 */}
+              <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                총 {orderedSteps.length}단계 대화
+                {mistakeStepIds.size > 0 && (
+                  <span className="ml-2 text-amber-400/60">🔄 복습 {mistakeStepIds.size}개 포함</span>
+                )}
+              </p>
+
+              {/* 시작 버튼 */}
+              <button
+                onClick={() => setShowIntro(false)}
+                className="w-full py-4 rounded-2xl font-black text-sm tracking-widest uppercase transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, #d97706, #f59e0b)',
+                  color: '#000',
+                  boxShadow: '0 0 32px rgba(245,158,11,0.35)',
+                }}
+              >
+                ▶ 시작하기
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── 배경: 씬 이미지 전체 채움 ── */}
         <div className="absolute inset-0 z-0">
@@ -421,6 +496,43 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               >
                 읽었어요, 다음으로 →
               </button>
+            </div>
+          )}
+
+          {/* 학습 목표 키워드 스트립 — 채점 기준 명시 */}
+          {currentStep.expected_keywords.length > 0 && !npcResponse && (
+            <div className="flex items-center gap-2 px-1 animate-fade-in-up">
+              <span className="text-[10px] font-bold tracking-wider uppercase shrink-0" style={{ color: 'rgba(245,158,11,0.4)' }}>🎯 목표</span>
+              <div className="flex flex-wrap gap-1.5">
+                {currentStep.expected_keywords.map((kw, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] font-mono px-2 py-0.5 rounded-md"
+                    style={{
+                      background: 'rgba(245,158,11,0.07)',
+                      border: '1px solid rgba(245,158,11,0.15)',
+                      color: 'rgba(255,255,255,0.35)',
+                    }}
+                  >
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 추천 표현 — 통과했지만 90점 미만일 때 NPC 응답과 함께 표시 */}
+          {npcResponse && lastGoalAchieved && lastScore !== null && lastScore < 90 && lastNaturalExpression && (
+            <div
+              className="rounded-xl px-4 py-3 space-y-1 animate-fade-in-up"
+              style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(245,158,11,0.5)' }}>
+                💡 더 자연스러운 표현
+              </p>
+              <p className="text-sm font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                &ldquo;{lastNaturalExpression}&rdquo;
+              </p>
             </div>
           )}
 

@@ -176,6 +176,21 @@ IMPORTANT RULES
 6. Score must be an integer (not a range string like "70-89" — pick a specific number)
 7. If the learner's input is very short (1–2 words), that's probably a 30–50 score — they're trying but incomplete
 8. Context matters: "I want coffee" at a café is 50–60; at a hotel requesting room service it might be 40–50
+
+═══════════════════════════════════════════════════════════════
+KEYWORD SCORING RULE — Deterministic Floor
+═══════════════════════════════════════════════════════════════
+
+You will receive a field "keywordUsed: true/false" in the dynamic message.
+
+If keywordUsed: true  → score MUST be ≥ 70. The learner used the target expression.
+                         Evaluate quality within 70–100 based on grammar/naturalness.
+If keywordUsed: false → score can be anything (0–100) based on actual quality.
+                         However: if they used a genuinely equivalent native expression
+                         not in the keyword list, score 70+ is acceptable if communication
+                         is fully achieved.
+
+This rule ensures consistent, predictable feedback: use the target word = pass.
 `
 
 export interface ChatMessage {
@@ -200,6 +215,7 @@ export async function POST(request: NextRequest) {
       scenarioLocation = '',
       attempt,
       maxAttempts = 3,
+      difficulty = 'normal',
     } = await request.json() as {
       userInput: string
       conversationHistory: ChatMessage[]
@@ -211,6 +227,7 @@ export async function POST(request: NextRequest) {
       scenarioLocation: string
       attempt: number
       maxAttempts: number
+      difficulty: string
     }
 
     if (!userInput) {
@@ -245,11 +262,25 @@ export async function POST(request: NextRequest) {
 
     const isLastAttempt = attempt >= maxAttempts
 
+    // Pre-check: did the learner use at least one expected keyword?
+    const inputLower = userInput.toLowerCase()
+    const keywordUsed = expectedKeywords.length > 0 &&
+      expectedKeywords.some(k => inputLower.includes(k.toLowerCase()))
+
+    const difficultyInstruction =
+      difficulty === 'easy'
+        ? 'DIFFICULTY: easy — Be generous and encouraging. Partial attempts score 50+. Minor grammar issues are fine for 70+. Give extra hints in NPC response to help the learner.'
+        : difficulty === 'hard'
+        ? 'DIFFICULTY: hard — Be strict. Perfect grammar AND natural phrasing required for 90+. Keyword alone is not enough for 70; sentence must also be grammatically correct. Score partial attempts 20–50.'
+        : 'DIFFICULTY: normal — Follow the standard rubric.'
+
     const dynamicMessage = `NPC: ${npcName}
 Location: ${scenarioLocation || 'a travel location'}
-Learning goal — use these naturally: ${JSON.stringify(expectedKeywords)}
+Learning goal — target keywords: ${JSON.stringify(expectedKeywords)}
+keywordUsed: ${keywordUsed}
 Hint: "${hintTemplate ?? 'none'}"
 Attempt: ${attempt} / ${maxAttempts}${isLastAttempt ? ' (LAST — be warm, move scene forward)' : ''}
+${difficultyInstruction}
 
 Conversation so far:
 ${historyText || '(just started)'}
@@ -274,6 +305,17 @@ Evaluate and respond with JSON only.`
 
     const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '{}'
     const result = JSON.parse(text)
+
+    // Safety net: keyword used → floor score by difficulty
+    // hard mode: keyword alone doesn't guarantee pass — AI scores freely
+    if (difficulty !== 'hard' && keywordUsed) {
+      const floor = difficulty === 'easy' ? 75 : 70
+      if ((result.score ?? 0) < floor) {
+        result.score = floor
+        result.goalAchieved = true
+      }
+      if (!result.goalAchieved) result.goalAchieved = true
+    }
 
     const advanceToNext = result.goalAchieved || isLastAttempt
 
