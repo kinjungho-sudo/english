@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { applyNPCVoice } from '@/lib/npcVoices'
 
 type Props = {
   npcName: string
@@ -88,13 +89,22 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
   const speak = useCallback(() => {
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
-    const utt = new SpeechSynthesisUtterance(ttsText ?? line)
-    utt.lang = 'en-US'
-    utt.rate = rateRef.current
-    utt.onend = () => onTTSEnd?.()
-    utteranceRef.current = utt
-    window.speechSynthesis.speak(utt)
-  }, [ttsText, line, onTTSEnd])
+
+    const doSpeak = () => {
+      const utt = new SpeechSynthesisUtterance(ttsText ?? line)
+      applyNPCVoice(utt, npcName, rateRef.current)
+      utt.onend = () => onTTSEnd?.()
+      utteranceRef.current = utt
+      window.speechSynthesis.speak(utt)
+    }
+
+    // Voices may not be loaded yet on first call — wait for voiceschanged
+    if (window.speechSynthesis.getVoices().length > 0) {
+      doSpeak()
+    } else {
+      window.speechSynthesis.addEventListener('voiceschanged', doSpeak, { once: true })
+    }
+  }, [ttsText, line, npcName, onTTSEnd])
 
   useEffect(() => {
     if (done) speak()
@@ -103,6 +113,8 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
   function changeSpeed(s: number) {
     setRate(s)
     rateRef.current = s
+    // Re-speak with new speed if already done
+    if (utteranceRef.current && done) speak()
   }
 
   return (
