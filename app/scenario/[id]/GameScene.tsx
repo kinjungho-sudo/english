@@ -36,8 +36,6 @@ const MAX_ATTEMPTS = 3
 function getReaction(pts: number): { label: string; color: string } | null {
   if (pts >= 90) return { label: 'Perfect! ✨', color: '#f59e0b' }
   if (pts >= 70) return { label: 'Great! 👍',   color: '#34d399' }
-  if (pts >= 50) return { label: 'Good! 😊',    color: '#60a5fa' }
-  if (pts >= 30) return { label: 'Nice try!',   color: '#fb923c' }
   return null
 }
 
@@ -65,6 +63,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   const [lastFeedback, setLastFeedback] = useState<string | null>(null)
   const [lastCorrection, setLastCorrection] = useState<string | null>(null)
   const [lastGoalAchieved, setLastGoalAchieved] = useState(false)
+  const [lastScore, setLastScore] = useState<number | null>(null)
   const [scorePopup, setScorePopup] = useState<{ label: string; pts: number; color: string } | null>(null)
 
   const pendingScoreRef = useRef(0)
@@ -94,6 +93,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     setLastFeedback(null)
     setLastCorrection(null)
     setLastGoalAchieved(false)
+    setLastScore(null)
     setExpression('neutral')
     setSceneError(false)
     setCharError(false)
@@ -160,6 +160,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
       setLastFeedback(data.feedback ?? null)
       setLastCorrection(data.correction ?? null)
       setLastGoalAchieved(data.goalAchieved ?? false)
+      setLastScore(pts)
       setAttempt(nextAttempt)
 
       // Update conversation history
@@ -339,19 +340,31 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             </div>
           )}
 
-          {/* 이전 시도 피드백 (재시도 중일 때만 표시) */}
-          {lastFeedback && !npcResponse && attempt > 0 && attempt < MAX_ATTEMPTS && !lastGoalAchieved && (
-            <div className="rounded-xl px-4 py-2.5 space-y-1"
-              style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="text-white/55 text-[12px] leading-relaxed">{lastFeedback}</p>
-              {lastCorrection && (
-                <p className="text-amber-400/65 text-[11px]">{lastCorrection}</p>
-              )}
-            </div>
+          {/* 피드백 패널 — 점수별 스타일 */}
+          {lastFeedback && !npcResponse && attempt > 0 && !lastGoalAchieved && (
+            (() => {
+              const isWrong = lastScore === 0
+              const isTried = lastScore !== null && lastScore > 0 && lastScore < 70
+              return (
+                <div className="rounded-xl px-4 py-2.5 space-y-1 animate-fade-in-up" style={{
+                  background: isWrong ? 'rgba(239,68,68,0.07)' : isTried ? 'rgba(245,158,11,0.07)' : 'rgba(0,0,0,0.4)',
+                  border: `1px solid ${isWrong ? 'rgba(239,68,68,0.2)' : isTried ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.07)'}`,
+                }}>
+                  <p className={`text-[12px] leading-relaxed ${isWrong ? 'text-red-300/70' : isTried ? 'text-amber-200/70' : 'text-white/55'}`}>
+                    {lastFeedback}
+                  </p>
+                  {lastCorrection && (
+                    <p className={`text-[11px] font-medium ${isWrong ? 'text-red-400/60' : 'text-amber-400/70'}`}>
+                      {lastCorrection}
+                    </p>
+                  )}
+                </div>
+              )
+            })()
           )}
 
-          {/* 2회 이상 실패 시 힌트 + 넘어가기 */}
-          {attempt >= 2 && !npcResponse && !lastGoalAchieved && currentStep.hint_template && (
+          {/* 힌트 + 넘어가기 — 완전 오답 즉시 표시, 또는 2회 이상 실패 */}
+          {((lastScore === 0 && attempt >= 1) || attempt >= 2) && !npcResponse && !lastGoalAchieved && currentStep.hint_template && (
             <div className="rounded-xl px-4 py-3 space-y-2.5 animate-fade-in-up"
               style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}>
               <div className="flex items-start gap-2">

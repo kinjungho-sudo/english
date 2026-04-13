@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     const prompt = `You are ${npcName}, working at ${scenarioLocation || 'a travel location'}. You are also an English teacher helping a Korean beginner traveler practice English.
 
-LEARNING GOAL: Guide the learner to naturally use these expressions: ${JSON.stringify(expectedKeywords)}
+LEARNING GOAL: The learner should naturally use these expressions: ${JSON.stringify(expectedKeywords)}
 Hint given to learner: "${hintTemplate ?? 'none'}"
 This is attempt ${attempt} of ${maxAttempts}.
 
@@ -61,20 +61,43 @@ ${historyText || '(conversation just started)'}
 
 Learner's latest reply: "${userInput}"
 
-YOUR TASK:
-1. Evaluate if the learner achieved the goal (used the target expressions naturally, even if grammar isn't perfect)
-2. Stay in character as ${npcName} — respond naturally as that character would in ${scenarioLocation}
-3. If goal NOT achieved and attempts remain: gently redirect toward the target expression within your character response (embed the correct expression naturally in your reply so they can hear it)
-4. If goal achieved OR this is the last attempt: respond positively and wrap up this interaction
-${isLastAttempt ? '5. This is the LAST attempt — be encouraging regardless of performance' : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCORE TIERS — choose ONE, be strict:
 
-Respond ONLY with this JSON (no markdown):
+● 90–100 (Perfect): Complete, natural English sentence. Native speaker quality.
+   feedback: "✅ 완벽해요! " + 1 sentence praise (Korean)
+   correction: null
+   goalAchieved: true
+
+● 70–89 (Great): Goal achieved. Communication works, minor imperfections OK.
+   feedback: "✅ 잘했어요! " + brief positive (Korean)
+   correction: null
+   goalAchieved: true
+
+● 30–60 (Tried): Understood the intent but expression is awkward, incomplete, or unnatural.
+   feedback: "💬 이해는 했어요! " + explain in one sentence what would sound more natural (Korean)
+   correction: "이렇게 말하는 게 더 자연스러워요: [better English expression]"
+   goalAchieved: false
+
+● 0 (Wrong): Completely off-topic, wrong context, or the response makes no sense here.
+   feedback: "❌ " + briefly explain in one sentence why this doesn't work (Korean)
+   correction: "정답 표현: [target English expression]"
+   goalAchieved: false
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+npcResponse rules:
+- Always respond in character as ${npcName} at ${scenarioLocation} (1–2 English sentences)
+- Score 70+: natural continuation of the scene
+- Score 0–60: subtly weave the correct target expression into your reply so the learner hears it
+${isLastAttempt ? '- This is the LAST attempt — be warm and encouraging regardless of score' : ''}
+
+Respond ONLY with JSON (no markdown):
 {
-  "goalAchieved": <true if learner used target expressions naturally, false otherwise>,
-  "score": <0-100, where 100=perfect natural English, 70=goal achieved with minor issues, 40=partial attempt, 10=off-topic>,
-  "npcResponse": "<1-2 sentences in English as ${npcName}, in-character — if not achieved, subtly model the correct expression>,
-  "feedback": "<1-2 sentences Korean feedback — always start with praise, then gentle tip>",
-  "correction": <null or "더 자연스러운 표현: [expression]" in Korean>,
+  "goalAchieved": <true|false>,
+  "score": <0 | 30-60 | 70-89 | 90-100>,
+  "npcResponse": "<1-2 sentences in English as ${npcName}>",
+  "feedback": "<Korean feedback with prefix as described above>",
+  "correction": <null or Korean string>,
   "naturalExpression": "<the most natural English expression for this goal>"
 }`
 
