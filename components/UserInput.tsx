@@ -48,6 +48,9 @@ declare global {
 
 type SttStatus = 'idle' | 'listening' | 'error-permission' | 'unsupported'
 
+// Evaluated once at module load on the client; navigator is always present for 'use client' components
+const IS_MOBILE = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+
 export default function UserInput({ hintTemplate, onSubmit, loading, disabled, characterName, avatarEmoji }: Props) {
   const [value, setValue] = useState('')
   const [showHint, setShowHint] = useState(false)
@@ -57,7 +60,6 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
     if (typeof window === 'undefined') return 'idle'
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition) ? 'idle' : 'unsupported'
   })
-  const isMobile = typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
   const inputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
 
@@ -139,7 +141,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
       try { recognitionRef.current.abort() } catch { /* ignore */ }
       recognitionRef.current = null
     }
-    if (sttStatus === 'listening') setSttStatus('idle')
+    setSttStatus(prev => prev === 'listening' ? 'idle' : prev)
   }
 
   function toggleMic() {
@@ -192,7 +194,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
             <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
           </span>
           <span className="text-red-300/70 text-[12px]">
-            {isMobile ? '말하기 완료 후 자동 종료돼요' : '듣는 중... 영어로 말해보세요'}
+            {IS_MOBILE ? '말하기 완료 후 자동 종료돼요' : '듣는 중... 영어로 말해보세요'}
           </span>
         </div>
       )}
@@ -225,7 +227,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
           disabled={loading || disabled}
           placeholder={listening ? '말하는 중...' : '영어로 답해보세요...'}
           className="game-input flex-1 px-3 py-3.5 disabled:opacity-25"
-          autoFocus={!isMobile}
+          autoFocus={!IS_MOBILE}
         />
 
         {/* 마이크 버튼 — unsupported일 때도 렌더링하되 dimmed 처리 */}
