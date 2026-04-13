@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { saveMistake, markMastered } from '@/lib/db/mistakes'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -64,45 +65,12 @@ JSON만 응답하세요 (마크다운, 추가 텍스트 금지):
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const evaluation = JSON.parse(text)
 
-    // 오답인 경우 user_mistakes에 저장
     if (!evaluation.is_correct && stepId && scenarioId) {
-      const { data: existing } = await supabase
-        .from('user_mistakes')
-        .select('id, mistake_count')
-        .eq('user_id', user.id)
-        .eq('step_id', stepId)
-        .single()
-
-      if (existing) {
-        await supabase
-          .from('user_mistakes')
-          .update({
-            mistake_count: existing.mistake_count + 1,
-            wrong_input: userInput,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id)
-      } else {
-        await supabase.from('user_mistakes').insert({
-          user_id: user.id,
-          scenario_id: scenarioId,
-          step_id: stepId,
-          wrong_input: userInput,
-          correct_expression: evaluation.correct_expression,
-          context: npcLine,
-          mistake_count: 1,
-        })
-      }
+      await saveMistake(supabase, user.id, stepId, scenarioId, userInput,
+        evaluation.correct_expression, npcLine)
     }
-
-    // 정답인 경우 — 해당 스텝 실수 마스터 처리 (3번 연속 정답 로직은 클라이언트에서 관리)
     if (evaluation.is_correct && stepId) {
-      await supabase
-        .from('user_mistakes')
-        .update({ mastered_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('step_id', stepId)
-        .is('mastered_at', null)
+      await markMastered(supabase, user.id, stepId)
     }
 
     return NextResponse.json(evaluation)

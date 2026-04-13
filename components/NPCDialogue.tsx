@@ -33,11 +33,24 @@ const NPC_BORDER: Record<string, string> = {
 
 const SPEEDS = [0.75, 1.0, 1.25, 1.5]
 
-// In-memory audio cache: cacheKey → object URL
+const MAX_AUDIO_CACHE = 60
+// In-memory audio cache: cacheKey → object URL (insertion-order LRU via Map)
 const audioCache = new Map<string, string>()
 
 function cacheKey(text: string, npcName: string) {
   return `${npcName}::${text}`
+}
+
+function setCached(key: string, url: string) {
+  if (audioCache.size >= MAX_AUDIO_CACHE) {
+    // Map preserves insertion order — first key is oldest
+    const oldest = audioCache.keys().next().value
+    if (oldest) {
+      URL.revokeObjectURL(audioCache.get(oldest)!)
+      audioCache.delete(oldest)
+    }
+  }
+  audioCache.set(key, url)
 }
 
 export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props) {
@@ -116,7 +129,7 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
         if (!res.ok) throw new Error('TTS API failed')
         const blob = await res.blob()
         blobUrl = URL.createObjectURL(blob)
-        audioCache.set(key, blobUrl)
+        setCached(key, blobUrl)
       } catch {
         return false // signal fallback needed
       } finally {

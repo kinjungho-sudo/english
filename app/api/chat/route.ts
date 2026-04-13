@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { saveMistake, markMastered } from '@/lib/db/mistakes'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -276,45 +277,12 @@ Evaluate and respond with JSON only.`
 
     const advanceToNext = result.goalAchieved || isLastAttempt
 
-    // Save mistake if goal not achieved on any attempt
     if (!result.goalAchieved && stepId && scenarioId) {
-      const { data: existing } = await supabase
-        .from('user_mistakes')
-        .select('id, mistake_count')
-        .eq('user_id', user.id)
-        .eq('step_id', stepId)
-        .single()
-
-      if (existing) {
-        await supabase
-          .from('user_mistakes')
-          .update({
-            mistake_count: existing.mistake_count + 1,
-            wrong_input: userInput,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id)
-      } else {
-        await supabase.from('user_mistakes').insert({
-          user_id: user.id,
-          scenario_id: scenarioId,
-          step_id: stepId,
-          wrong_input: userInput,
-          correct_expression: result.naturalExpression ?? '',
-          context: conversationHistory[0]?.content ?? '',
-          mistake_count: 1,
-        })
-      }
+      await saveMistake(supabase, user.id, stepId, scenarioId, userInput,
+        result.naturalExpression ?? '', conversationHistory[0]?.content ?? '')
     }
-
-    // Master the mistake if goal achieved
     if (result.goalAchieved && stepId) {
-      await supabase
-        .from('user_mistakes')
-        .update({ mastered_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('step_id', stepId)
-        .is('mastered_at', null)
+      await markMastered(supabase, user.id, stepId)
     }
 
     return NextResponse.json({
