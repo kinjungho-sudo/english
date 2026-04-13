@@ -269,18 +269,17 @@ export async function POST(request: NextRequest) {
 
     const difficultyInstruction =
       difficulty === 'easy'
-        ? 'DIFFICULTY: easy — Be generous and encouraging. Partial attempts score 50+. Minor grammar issues are fine for 70+. Give extra hints in NPC response to help the learner.'
+        ? '\nDIFFICULTY: easy — Be generous and encouraging. Partial attempts score 50+. Minor grammar issues are fine for 70+. Give extra hints in NPC response to help the learner.'
         : difficulty === 'hard'
-        ? 'DIFFICULTY: hard — Be strict. Perfect grammar AND natural phrasing required for 90+. Keyword alone is not enough for 70; sentence must also be grammatically correct. Score partial attempts 20–50.'
-        : 'DIFFICULTY: normal — Follow the standard rubric.'
+        ? '\nDIFFICULTY: hard — Be strict. Perfect grammar AND natural phrasing required for 90+. Keyword alone is not enough for 70; sentence must also be grammatically correct. Score partial attempts 20–50.'
+        : ''
 
     const dynamicMessage = `NPC: ${npcName}
 Location: ${scenarioLocation || 'a travel location'}
 Learning goal — target keywords: ${JSON.stringify(expectedKeywords)}
 keywordUsed: ${keywordUsed}
 Hint: "${hintTemplate ?? 'none'}"
-Attempt: ${attempt} / ${maxAttempts}${isLastAttempt ? ' (LAST — be warm, move scene forward)' : ''}
-${difficultyInstruction}
+Attempt: ${attempt} / ${maxAttempts}${isLastAttempt ? ' (LAST — be warm, move scene forward)' : ''}${difficultyInstruction}
 
 Conversation so far:
 ${historyText || '(just started)'}

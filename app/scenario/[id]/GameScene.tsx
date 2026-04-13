@@ -9,7 +9,7 @@ import { getSceneUrl, getCharacterUrl, scoreToExpression } from '@/lib/assets'
 import type { Scenario, DialogueStep } from '@/lib/scenarios/data'
 import type { Expression } from '@/lib/assets'
 import type { ChatMessage } from '@/app/api/chat/route'
-import { sfxForScore, sfxAdvance } from '@/lib/sfx'
+import { sfxForScore, sfxAdvance, sfxWarmup } from '@/lib/sfx'
 
 type Props = {
   scenario: Scenario
@@ -141,7 +141,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   }
 
   function goNext(newScore: number) {
-    sfxAdvance()
+    if (!isLastStep) sfxAdvance()
     resetStepState()
     if (isLastStep) {
       saveProgress(orderedSteps.length, newScore, true)
@@ -314,7 +314,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
               {/* 시작 버튼 */}
               <button
-                onClick={() => setShowIntro(false)}
+                onClick={() => { sfxWarmup(); setShowIntro(false) }}
                 className="w-full py-4 rounded-2xl font-black text-sm tracking-widest uppercase transition-all hover:scale-[1.02] active:scale-[0.98]"
                 style={{
                   background: 'linear-gradient(135deg, #d97706, #f59e0b)',
