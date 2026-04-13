@@ -46,6 +46,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
   const [focused, setFocused] = useState(false)
   const [listening, setListening] = useState(false)
   const [sttSupported, setSttSupported] = useState(false)
+  const [showSttWarning, setShowSttWarning] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
 
@@ -184,7 +185,7 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
         />
 
         {/* 마이크 버튼 */}
-        {sttSupported && (
+        {sttSupported ? (
           <button
             type="button"
             onClick={toggleMic}
@@ -208,6 +209,28 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
               </svg>
             )}
           </button>
+        ) : (
+          <div className="relative shrink-0 m-1.5">
+            <button
+              type="button"
+              onClick={() => setShowSttWarning(v => !v)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/4 text-white/18 hover:text-white/35 transition-colors"
+              title="음성 입력 미지원"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+              </svg>
+            </button>
+            {showSttWarning && (
+              <div className="absolute bottom-11 right-0 w-56 bg-gray-900 border border-white/12 rounded-xl p-3 z-50 shadow-xl">
+                <p className="text-white/60 text-[11px] leading-relaxed">
+                  음성 입력은 <span className="text-white/85 font-bold">Chrome</span>에서만 지원해요.
+                </p>
+                <p className="text-white/35 text-[10px] mt-1">Safari · Firefox는 미지원</p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* 전송 버튼 */}

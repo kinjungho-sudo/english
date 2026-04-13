@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import NPCDialogue from '@/components/NPCDialogue'
@@ -39,12 +39,13 @@ const NPC_EMOJI: Record<string, string> = {
   CHEN:  '💊',
 }
 
-const MAX_ATTEMPTS = 3
+const MAX_ATTEMPTS = 2
 
 function getReaction(pts: number): { label: string; color: string } | null {
   if (pts >= 90) return { label: 'Perfect! ✨', color: '#f59e0b' }
   if (pts >= 70) return { label: 'Great! 👍',   color: '#34d399' }
-  return null
+  if (pts >= 30) return { label: 'Nice try 💪',  color: '#94a3b8' }
+  return            { label: 'Bad 😞',           color: '#f87171' }
 }
 
 export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji }: Props) {
@@ -80,6 +81,16 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
   const currentStep = orderedSteps[currentIndex]
   const isLastStep = currentIndex === orderedSteps.length - 1
+
+  // 스텝마다 대사 변형 랜덤 선택 (variants가 없으면 기본 npc_line 사용)
+  const currentNpcLine = useMemo(() => {
+    if (!currentStep) return ''
+    const variants = currentStep.npc_line_variants ?? []
+    if (variants.length === 0) return currentStep.npc_line
+    const all = [currentStep.npc_line, ...variants]
+    return all[Math.floor(Math.random() * all.length)]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep?.id])
   const fallbackGradient = SCENE_FALLBACK_GRADIENT[scenario.id] ?? 'from-gray-900 to-black'
 
   const sceneUrl = getSceneUrl(scenario.id, currentStep?.step_order ?? 1, expression)
@@ -424,8 +435,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
           ) : (
             <NPCDialogue
               npcName={scenario.npc_name}
-              line={currentStep.npc_line}
-              ttsText={currentStep.tts_text}
+              line={currentNpcLine}
+              ttsText={currentStep.tts_text ?? currentNpcLine}
             />
           )}
 

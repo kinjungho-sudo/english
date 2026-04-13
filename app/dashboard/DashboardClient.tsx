@@ -24,11 +24,17 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
   const router = useRouter()
   const supabase = createClient()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [streak, setStreak] = useState(0)
 
   useEffect(() => {
     if (!localStorage.getItem('sq_onboarded')) {
       setShowOnboarding(true)
     }
+    // 스트릭 업데이트
+    fetch('/api/streak', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => setStreak(d.streak ?? 0))
+      .catch(() => {})
   }, [])
 
   function closeOnboarding() {
@@ -55,6 +61,13 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
 
   const hasReviewItems = unmastered.length > 0
 
+  // ── 학습 통계 ──
+  const thisMonth = new Date().toISOString().slice(0, 7) // "YYYY-MM"
+  const masteredThisMonth = mastered.filter(m => m.mastered_at?.startsWith(thisMonth)).length
+  const top3Mistakes = [...unmastered]
+    .sort((a, b) => b.mistake_count - a.mistake_count)
+    .slice(0, 3)
+
   return (
     <div className="game-wrap bg-gray-950">
       <div className="game-card bg-gray-950 relative">
@@ -66,14 +79,22 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
           <span className="font-black text-white tracking-widest text-sm uppercase">Scene Quest</span>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/profile"
-            className="flex items-center gap-2 bg-white/5 border border-white/10 hover:border-amber-500/40 rounded-full pl-1.5 pr-3 py-1 transition-colors"
-          >
-            <span className="text-base leading-none">{avatarEmoji}</span>
-            <span className="text-white/70 text-xs font-bold">{characterName}</span>
-            <span className="text-amber-400 text-xs font-bold ml-0.5">Lv.{levelInfo.level}</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            {streak >= 2 && (
+              <div className="flex items-center gap-1 bg-orange-500/15 border border-orange-500/25 rounded-full px-2.5 py-1">
+                <span className="text-sm leading-none">🔥</span>
+                <span className="text-orange-300 text-[11px] font-black">{streak}일</span>
+              </div>
+            )}
+            <Link
+              href="/profile"
+              className="flex items-center gap-2 bg-white/5 border border-white/10 hover:border-amber-500/40 rounded-full pl-1.5 pr-3 py-1 transition-colors"
+            >
+              <span className="text-base leading-none">{avatarEmoji}</span>
+              <span className="text-white/70 text-xs font-bold">{characterName}</span>
+              <span className="text-amber-400 text-xs font-bold ml-0.5">Lv.{levelInfo.level}</span>
+            </Link>
+          </div>
           <button onClick={signOut} className="text-gray-600 hover:text-gray-400 text-xs transition-colors">
             Exit
           </button>
@@ -116,6 +137,44 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
             <span className="text-gray-700 text-xs">마이페이지 →</span>
           </div>
         </Link>
+
+        {/* 학습 통계 */}
+        <div className="grid grid-cols-2 gap-2.5 mb-5">
+          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl px-4 py-3.5">
+            <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">이번 달 마스터</p>
+            <p className="text-2xl font-black text-white leading-none">
+              {masteredThisMonth}
+              <span className="text-sm text-gray-600 font-normal ml-1">개</span>
+            </p>
+            <p className="text-[10px] text-gray-700 mt-1">표현 습득 완료</p>
+          </div>
+          <div className="bg-gray-900/60 border border-gray-800 rounded-2xl px-4 py-3.5">
+            <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">전체 마스터</p>
+            <p className="text-2xl font-black text-white leading-none">
+              {mastered.length}
+              <span className="text-sm text-gray-600 font-normal ml-1">개</span>
+            </p>
+            <p className="text-[10px] text-gray-700 mt-1">누적 표현 수</p>
+          </div>
+        </div>
+
+        {/* TOP 3 오답 */}
+        {top3Mistakes.length > 0 && (
+          <div className="bg-gray-900/40 border border-gray-800/60 rounded-2xl p-4 mb-5">
+            <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-3">
+              📊 많이 틀린 표현 TOP {top3Mistakes.length}
+            </p>
+            <div className="space-y-2">
+              {top3Mistakes.map((m, i) => (
+                <div key={m.id} className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-gray-700 w-4 shrink-0">{i + 1}</span>
+                  <p className="text-xs text-white/55 flex-1 truncate">{m.correct_expression || m.wrong_input}</p>
+                  <span className="text-[10px] text-red-400/60 shrink-0 font-bold">{m.mistake_count}회</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <h1 className="text-xl font-black text-white mb-1" style={{ letterSpacing: '-0.03em' }}>
           STAGE SELECT

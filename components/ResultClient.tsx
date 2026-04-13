@@ -60,34 +60,36 @@ export default function ResultClient({
   const [xpBarWidth, setXpBarWidth] = useState(0)
   const [xpBarLevelUp, setXpBarLevelUp] = useState(false)
   const [showContent, setShowContent] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const displayScore = useCountUp(score, 1400, 600)
   const displayXP    = useCountUp(xpGained, 1000, 800)
 
+  function after(ms: number, fn: () => void) {
+    const id = setTimeout(fn, ms)
+    timersRef.current.push(id)
+  }
+
   useEffect(() => {
-    // Stagger content appearance
-    timerRef.current = setTimeout(() => setShowContent(true), 100)
-    // Score bar
-    setTimeout(() => setBarWidth(percentage), 700)
+    after(100,  () => setShowContent(true))
+    after(700,  () => setBarWidth(percentage))
 
     if (didLevelUp) {
-      // XP bar fills to 100% → level-up flash → resets and fills to new progress
-      setTimeout(() => setXpBarWidth(100), 900)
-      setTimeout(() => {
+      after(900,  () => setXpBarWidth(100))
+      after(1700, () => {
         setXpBarLevelUp(true)
-        setTimeout(() => {
+        after(600, () => {
           setXpBarLevelUp(false)
           setXpBarWidth(levelAfter.progress)
           setShowLevelUp(true)
-          setTimeout(() => setShowLevelUp(false), 3200)
-        }, 600)
-      }, 1700)
+          after(3200, () => setShowLevelUp(false))
+        })
+      })
     } else {
-      setTimeout(() => setXpBarWidth(levelAfter.progress), 900)
+      after(900, () => setXpBarWidth(levelAfter.progress))
     }
 
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    return () => { timersRef.current.forEach(clearTimeout); timersRef.current = [] }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

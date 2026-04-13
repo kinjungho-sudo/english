@@ -13,6 +13,7 @@ export type DialogueStep = {
   scenario_id: string
   step_order: number
   npc_line: string
+  npc_line_variants: string[]
   hint_template: string | null
   expected_keywords: string[]
   tts_text: string | null
