@@ -15,12 +15,20 @@ const NPC_NAMEPLATE: Record<string, string> = {
   SARAH: 'dialogue-nameplate-SARAH',
   MIKE:  'dialogue-nameplate-MIKE',
   EMMA:  'dialogue-nameplate-EMMA',
+  LUCY:  'dialogue-nameplate-LUCY',
+  JAMES: 'dialogue-nameplate-JAMES',
+  KATE:  'dialogue-nameplate-KATE',
+  CHEN:  'dialogue-nameplate-CHEN',
 }
 
 const NPC_BORDER: Record<string, string> = {
   SARAH: 'dialogue-box-SARAH',
   MIKE:  'dialogue-box-MIKE',
   EMMA:  'dialogue-box-EMMA',
+  LUCY:  'dialogue-box-LUCY',
+  JAMES: 'dialogue-box-JAMES',
+  KATE:  'dialogue-box-KATE',
+  CHEN:  'dialogue-box-CHEN',
 }
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.5]

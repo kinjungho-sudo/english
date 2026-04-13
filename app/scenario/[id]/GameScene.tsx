@@ -23,12 +23,20 @@ const SCENE_FALLBACK_GRADIENT: Record<string, string> = {
   '11111111-1111-1111-1111-111111111111': 'from-orange-950 via-amber-950 to-black',
   '22222222-2222-2222-2222-222222222222': 'from-blue-950 via-sky-950 to-black',
   '33333333-3333-3333-3333-333333333333': 'from-purple-950 via-violet-950 to-black',
+  '44444444-4444-4444-4444-444444444444': 'from-yellow-950 via-amber-950 to-black',
+  '55555555-5555-5555-5555-555555555555': 'from-yellow-900 via-zinc-950 to-black',
+  '66666666-6666-6666-6666-666666666666': 'from-pink-950 via-rose-950 to-black',
+  '77777777-7777-7777-7777-777777777777': 'from-teal-950 via-cyan-950 to-black',
 }
 
 const NPC_EMOJI: Record<string, string> = {
   SARAH: '👩‍🍳',
   MIKE:  '👨‍✈️',
   EMMA:  '👩‍💼',
+  LUCY:  '☕',
+  JAMES: '🚕',
+  KATE:  '🛍️',
+  CHEN:  '💊',
 }
 
 const MAX_ATTEMPTS = 3

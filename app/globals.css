@@ -74,6 +74,30 @@
 }
 .dialogue-nameplate-EMMA { background: #7c3aed; }
 
+.dialogue-box-LUCY {
+  border-color: rgba(251, 191, 36, 0.22);
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-LUCY { background: #b45309; }
+
+.dialogue-box-JAMES {
+  border-color: rgba(250, 204, 21, 0.22);
+  box-shadow: 0 0 40px rgba(250, 204, 21, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-JAMES { background: #854d0e; }
+
+.dialogue-box-KATE {
+  border-color: rgba(244, 114, 182, 0.22);
+  box-shadow: 0 0 40px rgba(244, 114, 182, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-KATE { background: #be185d; }
+
+.dialogue-box-CHEN {
+  border-color: rgba(45, 212, 191, 0.22);
+  box-shadow: 0 0 40px rgba(45, 212, 191, 0.06), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialogue-nameplate-CHEN { background: #0f766e; }
+
 /* Player input box */
 .dialogue-box-player {
   border-color: rgba(255, 255, 255, 0.06);
