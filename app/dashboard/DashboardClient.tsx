@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getLevelInfo, calculateXP } from '@/lib/levels'
+import OnboardingModal from '@/components/OnboardingModal'
 import type { Scenario, UserProgress, UserMistake } from '@/lib/scenarios/data'
 import type { User } from '@supabase/supabase-js'
 
@@ -21,6 +23,18 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
   void user
   const router = useRouter()
   const supabase = createClient()
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  useEffect(() => {
+    if (!localStorage.getItem('sq_onboarded')) {
+      setShowOnboarding(true)
+    }
+  }, [])
+
+  function closeOnboarding() {
+    localStorage.setItem('sq_onboarded', '1')
+    setShowOnboarding(false)
+  }
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -43,7 +57,8 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
 
   return (
     <div className="game-wrap bg-gray-950">
-      <div className="game-card bg-gray-950">
+      <div className="game-card bg-gray-950 relative">
+        {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
       {/* Header */}
       <header className="shrink-0 border-b border-gray-800/50 px-5 py-3.5 flex items-center justify-between bg-gray-950 z-10">
         <div className="flex items-center gap-2">
