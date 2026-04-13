@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 
 type Props = {
   hintTemplate: string | null
@@ -14,13 +14,18 @@ type Props = {
 // Web Speech API 타입 선언
 interface ISpeechResult {
   transcript: string
+  isFinal: boolean
 }
 interface ISpeechResultList {
   length: number
-  [index: number]: { 0: ISpeechResult }
+  [index: number]: { 0: ISpeechResult; isFinal: boolean }
+}
+interface ISpeechErrorEvent {
+  error: string
 }
 interface ISpeechEvent {
   results: ISpeechResultList
+  resultIndex: number
 }
 interface ISpeechRecognition extends EventTarget {
   lang: string
@@ -28,9 +33,10 @@ interface ISpeechRecognition extends EventTarget {
   interimResults: boolean
   start(): void
   stop(): void
+  abort(): void
   onstart: (() => void) | null
   onend: (() => void) | null
-  onerror: (() => void) | null
+  onerror: ((e: ISpeechErrorEvent) => void) | null
   onresult: ((e: ISpeechEvent) => void) | null
 }
 declare global {
@@ -40,19 +46,22 @@ declare global {
   }
 }
 
+type SttStatus = 'idle' | 'listening' | 'error-permission' | 'unsupported'
+
 export default function UserInput({ hintTemplate, onSubmit, loading, disabled, characterName, avatarEmoji }: Props) {
   const [value, setValue] = useState('')
   const [showHint, setShowHint] = useState(false)
   const [focused, setFocused] = useState(false)
-  const [listening, setListening] = useState(false)
-  const [sttSupported, setSttSupported] = useState(false)
-  const [showSttWarning, setShowSttWarning] = useState(false)
+  // lazy initializer: 브라우저 API는 클라이언트 전용 — SSR 가드 포함
+  const [sttStatus, setSttStatus] = useState<SttStatus>(() => {
+    if (typeof window === 'undefined') return 'idle'
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition) ? 'idle' : 'unsupported'
+  })
+  const isMobile = typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
   const inputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
 
-  useEffect(() => {
-    setSttSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition))
-  }, [])
+  const listening = sttStatus === 'listening'
 
   function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
@@ -72,50 +81,69 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
 
   function startListening() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) return
+    if (!SR) { setSttStatus('unsupported'); return }
 
     stopListening()
 
     const recognition = new SR()
     recognition.lang = 'en-US'
-    recognition.continuous = true
+    // continuous: false — 말이 끊기면 자동 종료 (모바일 WebView 호환)
+    recognition.continuous = false
     recognition.interimResults = true
 
-    recognition.onstart = () => setListening(true)
+    recognition.onstart = () => setSttStatus('listening')
 
     recognition.onresult = (event: ISpeechEvent) => {
-      let transcript = ''
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript
+      let interim = ''
+      let final = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript
+        if (event.results[i].isFinal) final += t
+        else interim += t
       }
-      setValue(transcript)
+      // final이 있으면 확정, 없으면 interim으로 미리보기
+      setValue(prev => {
+        if (final) return prev + final
+        // interim만 있을 때는 현재 interim 상태로 덮어씀 (연속 업데이트)
+        return prev.replace(/\s*\[.*?\]\s*$/, '') + (interim ? ` [${interim}]` : '')
+      })
     }
 
     recognition.onend = () => {
-      setListening(false)
+      // interim 태그 정리
+      setValue(prev => prev.replace(/\s*\[.*?\]\s*$/, '').trim())
+      setSttStatus('idle')
       recognitionRef.current = null
-      // 텍스트가 있으면 인풋 포커스
       inputRef.current?.focus()
     }
 
-    recognition.onerror = () => {
-      setListening(false)
+    recognition.onerror = (e: ISpeechErrorEvent) => {
       recognitionRef.current = null
+      if (e.error === 'not-allowed' || e.error === 'permission-denied') {
+        setSttStatus('error-permission')
+      } else {
+        setSttStatus('idle')
+      }
     }
 
     recognitionRef.current = recognition
-    recognition.start()
+    try {
+      recognition.start()
+    } catch {
+      setSttStatus('idle')
+    }
   }
 
   function stopListening() {
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try { recognitionRef.current.abort() } catch { /* ignore */ }
       recognitionRef.current = null
     }
-    setListening(false)
+    if (sttStatus === 'listening') setSttStatus('idle')
   }
 
   function toggleMic() {
+    if (sttStatus === 'error-permission') { setSttStatus('idle'); return }
     if (listening) stopListening()
     else startListening()
   }
@@ -156,14 +184,30 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
         </div>
       )}
 
-      {/* 듣는 중 표시 */}
+      {/* 듣는 중 */}
       {listening && (
         <div className="px-4 py-2 bg-red-950/20 border-b border-red-800/15 flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
           </span>
-          <span className="text-red-300/70 text-[12px]">듣는 중... 영어로 말해보세요</span>
+          <span className="text-red-300/70 text-[12px]">
+            {isMobile ? '말하기 완료 후 자동 종료돼요' : '듣는 중... 영어로 말해보세요'}
+          </span>
+        </div>
+      )}
+
+      {/* 마이크 권한 거부 안내 */}
+      {sttStatus === 'error-permission' && (
+        <div className="px-4 py-2 bg-orange-950/20 border-b border-orange-800/15 flex items-center gap-2">
+          <span className="text-orange-400/70 text-[12px]">🎤 마이크 권한이 필요해요. 브라우저 설정에서 허용해 주세요.</span>
+        </div>
+      )}
+
+      {/* STT 미지원 안내 */}
+      {sttStatus === 'unsupported' && (
+        <div className="px-4 py-2 bg-white/4 border-b border-white/8 flex items-center gap-2">
+          <span className="text-white/35 text-[11px]">🎤 이 환경에서는 음성 입력이 지원되지 않아요</span>
         </div>
       )}
 
@@ -181,57 +225,49 @@ export default function UserInput({ hintTemplate, onSubmit, loading, disabled, c
           disabled={loading || disabled}
           placeholder={listening ? '말하는 중...' : '영어로 답해보세요...'}
           className="game-input flex-1 px-3 py-3.5 disabled:opacity-25"
-          autoFocus
+          autoFocus={!isMobile}
         />
 
-        {/* 마이크 버튼 */}
-        {sttSupported ? (
-          <button
-            type="button"
-            onClick={toggleMic}
-            disabled={loading || disabled}
-            title={listening ? '녹음 중지' : '음성으로 말하기'}
-            className={`shrink-0 m-1.5 w-9 h-9 rounded-xl flex items-center justify-center transition-all
-              disabled:opacity-20 disabled:cursor-not-allowed
-              ${listening
-                ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
-                : 'bg-white/8 hover:bg-white/15 text-white/45 hover:text-white/80'
-              }`}
-          >
-            {listening ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="2"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
-              </svg>
-            )}
-          </button>
-        ) : (
-          <div className="relative shrink-0 m-1.5">
-            <button
-              type="button"
-              onClick={() => setShowSttWarning(v => !v)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/4 text-white/18 hover:text-white/35 transition-colors"
-              title="음성 입력 미지원"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
-              </svg>
-            </button>
-            {showSttWarning && (
-              <div className="absolute bottom-11 right-0 w-56 bg-gray-900 border border-white/12 rounded-xl p-3 z-50 shadow-xl">
-                <p className="text-white/60 text-[11px] leading-relaxed">
-                  음성 입력은 <span className="text-white/85 font-bold">Chrome</span>에서만 지원해요.
-                </p>
-                <p className="text-white/35 text-[10px] mt-1">Safari · Firefox는 미지원</p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* 마이크 버튼 — unsupported일 때도 렌더링하되 dimmed 처리 */}
+        <button
+          type="button"
+          onClick={sttStatus !== 'unsupported' ? toggleMic : undefined}
+          disabled={(loading || disabled) && sttStatus !== 'unsupported'}
+          title={
+            sttStatus === 'unsupported'      ? '음성 입력 미지원' :
+            sttStatus === 'error-permission' ? '마이크 권한 필요' :
+            listening                        ? '녹음 중지' : '음성으로 말하기'
+          }
+          className={`shrink-0 m-1.5 w-9 h-9 rounded-xl flex items-center justify-center transition-all
+            ${sttStatus === 'unsupported'
+              ? 'bg-white/4 text-white/15 cursor-default'
+              : sttStatus === 'error-permission'
+                ? 'bg-orange-900/30 text-orange-400/60 hover:bg-orange-900/50'
+                : listening
+                  ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
+                  : 'bg-white/8 hover:bg-white/15 text-white/45 hover:text-white/80 disabled:opacity-20 disabled:cursor-not-allowed'
+            }`}
+        >
+          {listening ? (
+            // 중지 아이콘
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
+            </svg>
+          ) : sttStatus === 'unsupported' ? (
+            // 취소선 마이크
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" opacity="0.3"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z" opacity="0.3"/>
+              <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            // 마이크 아이콘
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+            </svg>
+          )}
+        </button>
 
         {/* 전송 버튼 */}
         <button

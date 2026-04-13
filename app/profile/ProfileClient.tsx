@@ -323,7 +323,7 @@ export default function ProfileClient({ user, profile, progress, mastered, unmas
                   <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
                     <span className="text-green-500 text-xs mt-0.5">✓</span>
                     <div>
-                      <p className="text-green-300 text-sm font-medium">"{m.correct_expression}"</p>
+                      <p className="text-green-300 text-sm font-medium">{`"${m.correct_expression}"`}</p>
                       {m.context && <p className="text-gray-600 text-xs mt-0.5">{m.context.slice(0, 60)}…</p>}
                     </div>
                   </div>
@@ -348,7 +348,7 @@ export default function ProfileClient({ user, profile, progress, mastered, unmas
                     <div key={m.id} className="flex items-start gap-3 py-2 border-b border-gray-800/50 last:border-0">
                       <span className="text-amber-500 text-xs mt-0.5">△</span>
                       <div>
-                        <p className="text-amber-200 text-sm">"{m.correct_expression}"</p>
+                        <p className="text-amber-200 text-sm">{`"${m.correct_expression}"`}</p>
                         <p className="text-gray-600 text-xs">{scenario?.name} · {m.mistake_count}회 틀림</p>
                       </div>
                     </div>

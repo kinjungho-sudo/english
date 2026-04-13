@@ -38,4 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- 마이크 하드웨어 필요 선언 (required=false: 마이크 없어도 설치 가능) -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
 </manifest>

@@ -23,14 +23,14 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
   void user
   const router = useRouter()
   const supabase = createClient()
-  const [showOnboarding, setShowOnboarding] = useState(false)
+  // localStorage는 클라이언트 전용 — lazy initializer로 SSR 안전하게 처리
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => typeof window !== 'undefined' && !localStorage.getItem('sq_onboarded')
+  )
   const [streak, setStreak] = useState(0)
 
   useEffect(() => {
-    if (!localStorage.getItem('sq_onboarded')) {
-      setShowOnboarding(true)
-    }
-    // 스트릭 업데이트
+    // 스트릭 업데이트 (setState는 .then 콜백 안에서 호출)
     fetch('/api/streak', { method: 'POST' })
       .then(r => r.json())
       .then(d => setStreak(d.streak ?? 0))

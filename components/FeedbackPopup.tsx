@@ -48,7 +48,7 @@ export default function FeedbackPopup({ evaluation, onNext, onRetry, isLastStep 
             <p className="text-white/45 text-[13px] leading-relaxed mb-1.5">{correction}</p>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-white/20">→</span>
-              <p className="text-blue-300/90 text-[14px] font-medium">"{correct_expression}"</p>
+              <p className="text-blue-300/90 text-[14px] font-medium">{`"${correct_expression}"`}</p>
             </div>
           </div>
         )}

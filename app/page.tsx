@@ -20,6 +20,9 @@ export default function GameLoginPage() {
   const [stars, setStars] = useState<{ x: number; y: number; size: number; delay: number }[]>([])
 
   useEffect(() => {
+    // Math.random()은 클라이언트에서만 실행해야 hydration mismatch를 방지할 수 있어서
+    // useEffect 유지 (set-state-in-effect 예외 케이스)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStars(
       Array.from({ length: 60 }, () => ({
         x: Math.random() * 100,

@@ -195,7 +195,7 @@ export default function ResultClient({
                       {m.wrong_input && (
                         <p className="text-white/20 text-xs line-through mb-0.5">{m.wrong_input}</p>
                       )}
-                      <p className="text-green-400/80 text-sm font-medium">"{m.correct_expression}"</p>
+                      <p className="text-green-400/80 text-sm font-medium">{`"${m.correct_expression}"`}</p>
                     </div>
                   </div>
                 ))}
