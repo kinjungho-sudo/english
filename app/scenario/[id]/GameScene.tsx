@@ -9,6 +9,7 @@ import { getSceneUrl, getCharacterUrl, scoreToExpression } from '@/lib/assets'
 import type { Scenario, DialogueStep } from '@/lib/scenarios/data'
 import type { Expression } from '@/lib/assets'
 import type { ChatMessage } from '@/app/api/chat/route'
+import { sfxForScore, sfxAdvance } from '@/lib/sfx'
 
 type Props = {
   scenario: Scenario
@@ -140,6 +141,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   }
 
   function goNext(newScore: number) {
+    sfxAdvance()
     resetStepState()
     if (isLastStep) {
       saveProgress(orderedSteps.length, newScore, true)
@@ -218,6 +220,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
         ...(data.npcResponse ? [{ role: 'npc' as const, content: data.npcResponse }] : []),
       ])
 
+      sfxForScore(pts)
       const reaction = getReaction(pts)
       if (reaction) {
         setScorePopup({ label: reaction.label, pts, color: reaction.color })
