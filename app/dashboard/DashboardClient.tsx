@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getLevelInfo, calculateXP } from '@/lib/levels'
 import OnboardingModal from '@/components/OnboardingModal'
+import ActivityCalendar from '@/components/ActivityCalendar'
 import type { Scenario, UserProgress, UserMistake } from '@/lib/scenarios/data'
 import type { User } from '@supabase/supabase-js'
 
@@ -13,11 +14,22 @@ type Props = {
   user: User
   characterName: string
   avatarEmoji: string
+  difficulty: string
+  ttsAutoplay: boolean
+  hintEnabled: boolean
   scenarios: Scenario[]
   progress: UserProgress[]
   unmastered: UserMistake[]
   mastered: UserMistake[]
 }
+
+const DIFFICULTIES = [
+  { key: 'easy',   label: '쉬움',   desc: '문법 오류 관대히',  color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.35)'  },
+  { key: 'normal', label: '보통',   desc: '표준 기준',         color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.35)'  },
+  { key: 'hard',   label: '어려움', desc: '정확한 표현만',      color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.35)' },
+]
+
+const AVATARS = ['🧑‍💼', '👩‍✈️', '🧑‍🍳', '🧝', '🦸', '🧙', '👨‍🎓', '🧑‍🚀']
 
 // Accent colors match .dialogue-nameplate-* in globals.css
 const NPC_CARD_THEME: Record<string, { bg: string; border: string; accent: string }> = {
@@ -30,26 +42,76 @@ const NPC_CARD_THEME: Record<string, { bg: string; border: string; accent: strin
   CHEN:  { bg: 'rgba(15,118,110,0.08)',  border: 'rgba(15,118,110,0.22)',  accent: '#0f766e' },
 }
 
-export default function DashboardClient({ user, characterName, avatarEmoji, scenarios, progress, unmastered, mastered }: Props) {
+export default function DashboardClient({ user, characterName: initialCharacterName, avatarEmoji: initialAvatarEmoji, difficulty: initialDifficulty, ttsAutoplay: initialTts, hintEnabled: initialHint, scenarios, progress, unmastered, mastered }: Props) {
   void user
   const router = useRouter()
   const supabase = createClient()
-  // lazy initializer avoids flash-of-hidden-modal on hydration
+
   const [showOnboarding, setShowOnboarding] = useState(
     () => typeof window !== 'undefined' && !localStorage.getItem('sq_onboarded')
   )
+  const [showSettings, setShowSettings] = useState(false)
   const [streak, setStreak] = useState(0)
+  const [activeDates, setActiveDates] = useState<string[]>([])
+
+  // Settings state (mirrors profile)
+  const [characterName, setCharacterName] = useState(initialCharacterName)
+  const [avatarEmoji, setAvatarEmoji] = useState(initialAvatarEmoji)
+  const [difficulty, setDifficulty] = useState(initialDifficulty)
+  const [ttsAutoplay, setTtsAutoplay] = useState(initialTts)
+  const [hintEnabled, setHintEnabled] = useState(initialHint)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(initialCharacterName)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
 
   useEffect(() => {
-    fetch('/api/streak', { method: 'POST' })
-      .then(r => r.json())
-      .then(d => setStreak(d.streak ?? 0))
-      .catch(() => {})
+    // streak 기록 + activity 날짜 병렬 로드
+    Promise.all([
+      fetch('/api/streak', { method: 'POST' }).then(r => r.json()),
+      fetch('/api/activity').then(r => r.json()),
+    ]).then(([streakData, activityData]) => {
+      setStreak(streakData.streak ?? 0)
+      setActiveDates(activityData.dates ?? [])
+    }).catch(() => {})
   }, [])
 
   function closeOnboarding() {
     localStorage.setItem('sq_onboarded', '1')
     setShowOnboarding(false)
+  }
+
+  async function saveProfile(patch: Record<string, unknown>) {
+    setSaving(true)
+    await supabase.from('profiles').update(patch).eq('id', (await supabase.auth.getUser()).data.user!.id)
+    setSaving(false)
+    setSaveMsg('저장됨')
+    setTimeout(() => setSaveMsg(''), 1800)
+  }
+
+  async function handleNameSave() {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed.length < 2) return
+    setCharacterName(trimmed)
+    setEditingName(false)
+    await saveProfile({ character_name: trimmed })
+    router.refresh()
+  }
+
+  async function handleAvatarChange(emoji: string) {
+    setAvatarEmoji(emoji)
+    await saveProfile({ avatar_emoji: emoji })
+  }
+
+  async function handleDifficultyChange(d: string) {
+    setDifficulty(d)
+    await saveProfile({ difficulty: d })
+  }
+
+  async function handleToggle(key: 'tts_autoplay' | 'hint_enabled', val: boolean) {
+    if (key === 'tts_autoplay') setTtsAutoplay(val)
+    else setHintEnabled(val)
+    await saveProfile({ [key]: val })
   }
 
   async function signOut() {
@@ -129,15 +191,219 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
               </div>
             </Link>
 
+            {/* 설정 버튼 */}
             <button
-              onClick={signOut}
-              className="text-xs transition-colors"
-              style={{ color: 'rgba(75,85,99,0.8)' }}
+              onClick={() => setShowSettings(true)}
+              className="w-8 h-8 flex items-center justify-center rounded-xl transition-all hover:scale-105"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              title="설정"
             >
-              Exit
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
             </button>
           </div>
         </header>
+
+        {/* ════ 설정 바텀시트 ════ */}
+        {showSettings && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col justify-end"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowSettings(false) }}
+          >
+            <div
+              className="rounded-t-3xl flex flex-col animate-fade-in-up"
+              style={{
+                background: 'linear-gradient(to bottom, #111318, #0d0f14)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: 'none',
+                maxHeight: '88vh',
+              }}
+            >
+              {/* 핸들 + 헤더 */}
+              <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-between border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                  </div>
+                  <span className="font-black text-white text-sm tracking-wide">설정</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {saveMsg && <span className="text-[11px] font-bold" style={{ color: '#4ade80' }}>{saveMsg}</span>}
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+                    style={{ color: 'rgba(255,255,255,0.4)' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* 스크롤 영역 */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+
+                {/* ── 캐릭터 ── */}
+                <section>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>캐릭터</p>
+
+                  {/* 아바타 + 이름 */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                      style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
+                    >
+                      {avatarEmoji}
+                    </div>
+                    {editingName ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          autoFocus
+                          maxLength={16}
+                          value={nameInput}
+                          onChange={e => setNameInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false) }}
+                          className="flex-1 rounded-xl px-3 py-2 text-white text-sm font-bold focus:outline-none"
+                          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)' }}
+                        />
+                        <button onClick={handleNameSave} disabled={saving} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>저장</button>
+                        <button onClick={() => setEditingName(false)} className="text-xs text-gray-600 hover:text-gray-400 px-2">취소</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="font-bold text-white text-sm">{characterName}</span>
+                        <button onClick={() => { setNameInput(characterName); setEditingName(true) }} className="text-gray-600 hover:text-amber-400 transition-colors text-xs">✎</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 아바타 선택 */}
+                  <div className="grid grid-cols-8 gap-1.5">
+                    {AVATARS.map(emoji => (
+                      <button
+                        key={emoji}
+                        onClick={() => handleAvatarChange(emoji)}
+                        disabled={saving}
+                        className="aspect-square rounded-xl text-xl flex items-center justify-center transition-all"
+                        style={{
+                          background: avatarEmoji === emoji ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${avatarEmoji === emoji ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                          transform: avatarEmoji === emoji ? 'scale(1.1)' : undefined,
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── 난이도 ── */}
+                <section>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>게임 난이도</p>
+                  <div className="flex gap-2">
+                    {DIFFICULTIES.map(d => (
+                      <button
+                        key={d.key}
+                        onClick={() => handleDifficultyChange(d.key)}
+                        disabled={saving}
+                        className="flex-1 py-3 rounded-2xl text-center transition-all"
+                        style={{
+                          background: difficulty === d.key ? d.bg : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${difficulty === d.key ? d.border : 'rgba(255,255,255,0.07)'}`,
+                        }}
+                      >
+                        <p className="text-xs font-black" style={{ color: difficulty === d.key ? d.color : 'rgba(255,255,255,0.3)' }}>
+                          {d.label}
+                        </p>
+                        <p className="text-[9px] mt-0.5" style={{ color: difficulty === d.key ? d.color + '88' : 'rgba(255,255,255,0.12)' }}>
+                          {d.desc}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── 게임 설정 ── */}
+                <section>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-1" style={{ color: 'rgba(255,255,255,0.25)' }}>게임 설정</p>
+                  <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {[
+                      {
+                        key: 'tts_autoplay' as const,
+                        label: 'TTS 자동 재생',
+                        desc: 'NPC 대사 타이핑 완료 시 자동 음성',
+                        value: ttsAutoplay,
+                      },
+                      {
+                        key: 'hint_enabled' as const,
+                        label: '힌트 표시',
+                        desc: '게임 중 힌트 보기 버튼 표시',
+                        value: hintEnabled,
+                      },
+                    ].map((s, i) => (
+                      <div
+                        key={s.key}
+                        className="flex items-center justify-between px-4 py-3.5"
+                        style={{
+                          borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : undefined,
+                          background: 'rgba(255,255,255,0.02)',
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>{s.label}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}>{s.desc}</p>
+                        </div>
+                        <button
+                          onClick={() => handleToggle(s.key, !s.value)}
+                          disabled={saving}
+                          className="relative shrink-0 ml-4 transition-all"
+                          style={{
+                            width: '44px', height: '24px',
+                            borderRadius: '12px',
+                            background: s.value ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                          }}
+                        >
+                          <div
+                            className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                            style={{ left: s.value ? '22px' : '2px' }}
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── 계정 ── */}
+                <section className="pb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-3" style={{ color: 'rgba(255,255,255,0.25)' }}>계정</p>
+                  <div className="flex gap-2">
+                    <Link
+                      href="/profile"
+                      onClick={() => setShowSettings(false)}
+                      className="flex-1 py-3 rounded-2xl text-center text-xs font-bold transition-all"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}
+                    >
+                      마이페이지 →
+                    </Link>
+                    <button
+                      onClick={signOut}
+                      className="flex-1 py-3 rounded-2xl text-center text-xs font-bold transition-all"
+                      style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: 'rgba(248,113,113,0.6)' }}
+                    >
+                      로그아웃
+                    </button>
+                  </div>
+                </section>
+
+              </div>
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 overflow-y-auto px-5 py-8">
           {/* Review Alert */}
@@ -183,6 +449,9 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
               <span className="text-xs font-bold" style={{ color: 'rgba(245,158,11,0.5)' }}>{levelInfo.progress}% · 마이페이지 →</span>
             </div>
           </Link>
+
+          {/* 출석 달력 */}
+          <ActivityCalendar activeDates={activeDates} streak={streak} />
 
           {/* 학습 통계 */}
           <div className="grid grid-cols-2 gap-2.5 mb-5">

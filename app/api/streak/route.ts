@@ -9,7 +9,7 @@ export async function POST() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('streak_count, last_active_date')
+      .select('streak_count, last_active_date, activity_dates')
       .eq('id', user.id)
       .single()
 
@@ -17,9 +17,21 @@ export async function POST() {
 
     const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
     const last = profile.last_active_date as string | null
+    const existingDates: string[] = profile.activity_dates ?? []
+
+    // activity_dates에 오늘 추가 (중복 방지)
+    const activityDates = existingDates.includes(today)
+      ? existingDates
+      : [...existingDates, today]
 
     if (last === today) {
-      // Already counted today
+      // 이미 오늘 카운트됨 — activity_dates만 보정 후 반환
+      if (!existingDates.includes(today)) {
+        await supabase
+          .from('profiles')
+          .update({ activity_dates: activityDates })
+          .eq('id', user.id)
+      }
       return NextResponse.json({ streak: profile.streak_count ?? 0 })
     }
 
@@ -28,7 +40,11 @@ export async function POST() {
 
     await supabase
       .from('profiles')
-      .update({ streak_count: newStreak, last_active_date: today })
+      .update({
+        streak_count: newStreak,
+        last_active_date: today,
+        activity_dates: activityDates,
+      })
       .eq('id', user.id)
 
     return NextResponse.json({ streak: newStreak })
