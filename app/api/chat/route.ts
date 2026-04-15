@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { saveMistake, markMastered } from '@/lib/db/mistakes'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -243,6 +244,22 @@ export async function POST(request: NextRequest) {
         "I heard you, but let's practice in English — that's what we're here for!",
       ]
       const npcResponse = koreanNudges[Math.floor(Math.random() * koreanNudges.length)]
+      // 한국어 입력도 로그 저장
+      void createAdminClient().from('chat_logs').insert({
+        user_id: user.id,
+        scenario_id: scenarioId || null,
+        step_id: stepId || null,
+        user_input: userInput,
+        attempt,
+        difficulty,
+        keyword_used: false,
+        goal_achieved: false,
+        score: 0,
+        npc_response: npcResponse,
+        advance_to_next: false,
+        is_korean_input: true,
+      })
+
       return NextResponse.json({
         goalAchieved: false,
         score: 0,
@@ -325,6 +342,26 @@ Evaluate and respond with JSON only.`
     if (result.goalAchieved && stepId) {
       await markMastered(supabase, user.id, stepId)
     }
+
+    // ─── 비동기 로그 저장 (응답 지연 없음) ──────────────────────────────────
+    const adminDb = createAdminClient()
+    void adminDb.from('chat_logs').insert({
+      user_id: user.id,
+      scenario_id: scenarioId || null,
+      step_id: stepId || null,
+      user_input: userInput,
+      attempt,
+      difficulty,
+      keyword_used: keywordUsed,
+      goal_achieved: result.goalAchieved ?? false,
+      score: result.score ?? 50,
+      npc_response: result.npcResponse ?? null,
+      feedback: result.feedback ?? null,
+      correction: result.correction ?? null,
+      natural_expression: result.naturalExpression ?? null,
+      advance_to_next: advanceToNext,
+      is_korean_input: false,
+    })
 
     return NextResponse.json({
       goalAchieved: result.goalAchieved ?? false,
