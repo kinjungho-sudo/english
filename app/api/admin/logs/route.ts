@@ -27,26 +27,10 @@ export async function GET(request: NextRequest) {
 
   let query = admin
     .from('chat_logs')
-    .select(`
-      id,
-      user_id,
-      scenario_id,
-      step_id,
-      user_input,
-      attempt,
-      difficulty,
-      keyword_used,
-      goal_achieved,
-      score,
-      npc_response,
-      feedback,
-      correction,
-      natural_expression,
-      advance_to_next,
-      is_korean_input,
-      created_at,
-      scenarios(name, thumbnail)
-    `, { count: 'exact' })
+    .select(
+      'id, user_id, scenario_id, step_id, user_input, attempt, difficulty, keyword_used, goal_achieved, score, npc_response, feedback, correction, natural_expression, advance_to_next, is_korean_input, created_at',
+      { count: 'exact' }
+    )
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -59,6 +43,19 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // 시나리오 이름 매핑 (중복 제거 후 별도 조회)
+  const scenarioIds = [...new Set((data ?? []).map((l: { scenario_id: string }) => l.scenario_id).filter(Boolean))]
+  const scenarioMap: Record<string, { name: string; thumbnail: string }> = {}
+  if (scenarioIds.length > 0) {
+    const { data: scenarios } = await admin
+      .from('scenarios')
+      .select('id, name, thumbnail')
+      .in('id', scenarioIds)
+    for (const s of (scenarios ?? [])) {
+      scenarioMap[s.id] = { name: s.name, thumbnail: s.thumbnail }
+    }
   }
 
   // 유저 이메일 매핑 (중복 제거)
@@ -74,8 +71,8 @@ export async function GET(request: NextRequest) {
   const logs = (data ?? []).map((l: {
     id: string
     user_id: string
-    scenario_id: string
-    step_id: string
+    scenario_id: string | null
+    step_id: string | null
     user_input: string
     attempt: number
     difficulty: string
@@ -89,11 +86,10 @@ export async function GET(request: NextRequest) {
     advance_to_next: boolean
     is_korean_input: boolean
     created_at: string
-    scenarios: { name: string; thumbnail: string }[] | null
   }) => ({
     ...l,
-    scenarios: Array.isArray(l.scenarios) ? (l.scenarios[0] ?? null) : l.scenarios,
-    userEmail: emailMap[l.user_id] ?? l.user_id.slice(0, 8) + '...',
+    scenarios: l.scenario_id ? (scenarioMap[l.scenario_id] ?? null) : null,
+    userEmail: emailMap[l.user_id] ?? l.user_id?.slice(0, 8) + '...',
   }))
 
   return NextResponse.json({ logs, total: count ?? 0, page })
