@@ -92,7 +92,7 @@ export default function DashboardClient({ user, characterName, avatarEmoji, scen
         >
           <div className="flex items-center gap-2">
             <span className="text-lg">✈️</span>
-            <span className="font-black text-white tracking-widest text-sm uppercase">Scene Quest</span>
+            <span className="font-black text-white tracking-widest text-sm uppercase">Travel Quest</span>
           </div>
           <div className="flex items-center gap-3">
             {streak >= 2 && (
