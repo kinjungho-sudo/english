@@ -1,15 +1,156 @@
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import NPCDialogue from '@/components/NPCDialogue'
 import UserInput from '@/components/UserInput'
+import GameTutorial from '@/components/GameTutorial'
 import { getSceneUrl, getCharacterUrl, scoreToExpression } from '@/lib/assets'
 import type { Scenario, DialogueStep } from '@/lib/scenarios/data'
 import type { Expression } from '@/lib/assets'
 import type { ChatMessage } from '@/app/api/chat/route'
 import { sfxForScore, sfxAdvance, sfxWarmup } from '@/lib/sfx'
+import { createClient } from '@/lib/supabase/client'
+
+/* ─── 대화 히스토리 패널 ─── */
+type HistoryEntry = ChatMessage & { translation?: string; translating?: boolean }
+
+function HistoryPanel({
+  history,
+  npcName,
+  onClose,
+}: {
+  history: HistoryEntry[]
+  npcName: string
+  onClose: () => void
+}) {
+  const [entries, setEntries] = useState<HistoryEntry[]>(history)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // 외부 history 변경 시 동기화
+  useEffect(() => {
+    setEntries(history)
+  }, [history])
+
+  // 새 메시지 추가 시 스크롤
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [entries.length])
+
+  async function translate(idx: number) {
+    const entry = entries[idx]
+    if (entry.translation || entry.translating) return
+    setEntries(prev => prev.map((e, i) => i === idx ? { ...e, translating: true } : e))
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: entry.content }),
+      })
+      const { translation } = await res.json()
+      setEntries(prev => prev.map((e, i) => i === idx ? { ...e, translation, translating: false } : e))
+    } catch {
+      setEntries(prev => prev.map((e, i) => i === idx ? { ...e, translating: false } : e))
+    }
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-40 flex flex-col animate-fade-in-up"
+      style={{ background: 'rgba(2,6,23,0.97)', backdropFilter: 'blur(12px)' }}
+    >
+      {/* 헤더 */}
+      <div
+        className="shrink-0 flex items-center justify-between px-5 py-4 border-b"
+        style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+      >
+        <div>
+          <p className="text-white/80 font-bold text-sm tracking-wide">대화 기록</p>
+          <p className="text-white/30 text-[11px] mt-0.5">버블을 탭하면 한국어 번역</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/8 transition-all"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* 메시지 목록 */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <span className="text-4xl opacity-20">💬</span>
+            <p className="text-white/25 text-sm">아직 대화 기록이 없어요</p>
+          </div>
+        ) : (
+          entries.map((entry, idx) => {
+            const isUser = entry.role === 'user'
+            return (
+              <div key={idx} className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+                {/* 발화자 레이블 */}
+                <span className="text-[10px] font-bold tracking-wider uppercase px-1"
+                  style={{ color: isUser ? 'rgba(251,191,36,0.5)' : 'rgba(148,163,184,0.5)' }}>
+                  {isUser ? 'YOU' : npcName}
+                </span>
+                {/* 말풍선 — 탭하면 번역 */}
+                <button
+                  onClick={() => translate(idx)}
+                  className={`text-left max-w-[85%] rounded-2xl px-4 py-3 transition-all active:scale-[0.98] ${
+                    isUser
+                      ? 'rounded-tr-sm'
+                      : 'rounded-tl-sm'
+                  }`}
+                  style={isUser ? {
+                    background: 'rgba(245,158,11,0.15)',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                  } : {
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                >
+                  <p className="text-white/85 text-[13px] leading-relaxed">{entry.content}</p>
+                  {/* 번역 결과 */}
+                  {entry.translating && (
+                    <p className="text-[11px] mt-2 flex items-center gap-1.5"
+                      style={{ color: isUser ? 'rgba(251,191,36,0.5)' : 'rgba(148,163,184,0.5)' }}>
+                      <span className="inline-flex gap-0.5">
+                        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                        <span className="animate-bounce" style={{ animationDelay: '120ms' }}>·</span>
+                        <span className="animate-bounce" style={{ animationDelay: '240ms' }}>·</span>
+                      </span>
+                      번역 중
+                    </p>
+                  )}
+                  {entry.translation && (
+                    <p className="text-[12px] mt-2 pt-2 border-t leading-relaxed"
+                      style={{
+                        color: isUser ? 'rgba(251,191,36,0.7)' : 'rgba(148,163,184,0.7)',
+                        borderColor: isUser ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.07)',
+                      }}>
+                      🇰🇷 {entry.translation}
+                    </p>
+                  )}
+                  {/* 탭 유도 힌트 — 번역 전 */}
+                  {!entry.translation && !entry.translating && (
+                    <p className="text-[10px] mt-1.5 opacity-0 group-hover:opacity-100"
+                      style={{ color: isUser ? 'rgba(251,191,36,0.3)' : 'rgba(148,163,184,0.3)' }}>
+                      탭하여 번역
+                    </p>
+                  )}
+                </button>
+              </div>
+            )
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  )
+}
 
 type Props = {
   scenario: Scenario
@@ -20,6 +161,12 @@ type Props = {
   avatarEmoji?: string
   difficulty?: string
 }
+
+const DIFFICULTY_OPTIONS = [
+  { key: 'easy',   label: '쉬움',   desc: '문법 오류 관대히',  color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)'  },
+  { key: 'normal', label: '보통',   desc: '표준 기준',         color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)'  },
+  { key: 'hard',   label: '어려움', desc: '정확한 표현만 정답', color: '#f87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)' },
+]
 
 const SCENE_FALLBACK_GRADIENT: Record<string, string> = {
   '11111111-1111-1111-1111-111111111111': 'from-orange-950 via-amber-950 to-black',
@@ -50,9 +197,16 @@ function getReaction(pts: number): { label: string; color: string } | null {
   return            { label: 'Bad 😞',           color: '#f87171' }
 }
 
-export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji, difficulty = 'normal' }: Props) {
+export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji, difficulty: initialDifficulty = 'normal' }: Props) {
   void userId
   const router = useRouter()
+  const supabase = createClient()
+  const [difficulty, setDifficulty] = useState(initialDifficulty)
+
+  async function handleDifficultyChange(d: string) {
+    setDifficulty(d)
+    await supabase.from('profiles').update({ difficulty: d }).eq('id', (await supabase.auth.getUser()).data.user!.id)
+  }
 
   const orderedSteps = [
     ...steps.filter(s => mistakeStepIds.has(s.id)),
@@ -60,6 +214,9 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   ]
 
   const [showIntro, setShowIntro] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+  // 첫 게임 여부: localStorage 'sq_tutorial_done' 없으면 튜토리얼 표시
+  const [showTutorial, setShowTutorial] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [score, setScore] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -135,7 +292,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     if (pendingAdvance) {
       goNext(pendingScoreRef.current)
     } else {
-      // Stay on same step — re-enable input by resetting advancedRef
+      // Stay on same step — reset to main image and re-enable input
+      setExpression('neutral')
       advancedRef.current = false
     }
   }
@@ -238,6 +396,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             if (data.advanceToNext) {
               goNext(newScore)
             } else {
+              // Stay on same step — reset to main image
+              setExpression('neutral')
               advancedRef.current = false
             }
           }
@@ -312,9 +472,43 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
                 )}
               </p>
 
+              {/* 난이도 선택 */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] mb-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  난이도
+                </p>
+                <div className="flex gap-2">
+                  {DIFFICULTY_OPTIONS.map(d => (
+                    <button
+                      key={d.key}
+                      onClick={() => handleDifficultyChange(d.key)}
+                      className="flex-1 py-2 rounded-xl text-center transition-all"
+                      style={{
+                        background: difficulty === d.key ? d.bg : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${difficulty === d.key ? d.border : 'rgba(255,255,255,0.08)'}`,
+                      }}
+                    >
+                      <p className="text-xs font-black" style={{ color: difficulty === d.key ? d.color : 'rgba(255,255,255,0.3)' }}>
+                        {d.label}
+                      </p>
+                      <p className="text-[9px] mt-0.5" style={{ color: difficulty === d.key ? d.color + '99' : 'rgba(255,255,255,0.15)' }}>
+                        {d.desc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* 시작 버튼 */}
               <button
-                onClick={() => { sfxWarmup(); setShowIntro(false) }}
+                onClick={() => {
+                  sfxWarmup()
+                  setShowIntro(false)
+                  // 첫 게임이면 튜토리얼 표시
+                  if (typeof window !== 'undefined' && !localStorage.getItem('sq_tutorial_done')) {
+                    setShowTutorial(true)
+                  }
+                }}
                 className="w-full py-4 rounded-2xl font-black text-sm tracking-widest uppercase transition-all hover:scale-[1.02] active:scale-[0.98]"
                 style={{
                   background: 'linear-gradient(135deg, #d97706, #f59e0b)',
@@ -415,9 +609,31 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               ))}
             </div>
 
-            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1.5">
-              <span className="text-amber-400 text-[11px] leading-none">★</span>
-              <span className="text-white/85 text-[11px] font-bold tabular-nums leading-none">{score}</span>
+            <div className="flex items-center gap-2">
+              {/* 대화 기록 버튼 */}
+              <button
+                onClick={() => setShowHistory(true)}
+                className="relative flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:bg-white/10 active:scale-95"
+                style={{ color: convHistory.length > 0 ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.25)' }}
+                title="대화 기록"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                {convHistory.length > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black"
+                    style={{ background: 'rgba(245,158,11,0.9)', color: '#000' }}
+                  >
+                    {convHistory.length}
+                  </span>
+                )}
+              </button>
+              {/* 점수 */}
+              <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1.5">
+                <span className="text-amber-400 text-[11px] leading-none">★</span>
+                <span className="text-white/85 text-[11px] font-bold tabular-nums leading-none">{score}</span>
+              </div>
             </div>
           </div>
 
@@ -567,6 +783,25 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             />
           )}
         </div>
+
+        {/* ── 대화 히스토리 패널 ── */}
+        {showHistory && (
+          <HistoryPanel
+            history={convHistory}
+            npcName={scenario.npc_name}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
+
+        {/* ── 인게임 튜토리얼 오버레이 (첫 게임만) ── */}
+        {showTutorial && (
+          <GameTutorial
+            onDone={() => {
+              localStorage.setItem('sq_tutorial_done', '1')
+              setShowTutorial(false)
+            }}
+          />
+        )}
 
       </div>
     </div>

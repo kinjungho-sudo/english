@@ -29,7 +29,7 @@ const SLIDES = [
       <div className="mt-4 space-y-3">
         {[
           { num: '1', icon: '🔊', text: 'NPC가 영어로 말해요', sub: '자동으로 음성이 나와요' },
-          { num: '2', icon: '🎤', text: '영어로 직접 답해요', sub: '타이핑 또는 마이크 사용 가능' },
+          { num: '2', icon: '⌨️', text: '영어로 직접 답해요', sub: '입력창에 타이핑하고 전송' },
           { num: '3', icon: '⭐', text: 'AI가 즉시 평가해요', sub: 'Perfect / Great / 틀렸을 땐 설명' },
         ].map(s => (
           <div key={s.num} className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-3">
@@ -44,15 +44,46 @@ const SLIDES = [
     ),
   },
   {
+    emoji: '🎯',
+    title: '목표 키워드를\n포함해서 말해요',
+    body: null,
+    visual: (
+      <div className="mt-4 space-y-3">
+        <p className="text-white/40 text-[12px] leading-relaxed text-center">
+          각 대화마다 꼭 써야 하는 표현이 있어요.
+        </p>
+        {/* 목표 키워드 예시 */}
+        <div className="rounded-xl px-4 py-3 space-y-2"
+          style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(245,158,11,0.5)' }}>
+            🎯 목표 예시
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {['Can I have', 'please'].map(kw => (
+              <span key={kw} className="text-[11px] font-mono px-2 py-0.5 rounded-md"
+                style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.15)', color: 'rgba(255,255,255,0.55)' }}>
+                {kw}
+              </span>
+            ))}
+          </div>
+          <p className="text-white/30 text-[11px]">→ <span className="text-white/55 font-medium">"Can I have a menu, please?"</span></p>
+        </div>
+        <p className="text-white/30 text-[11px] text-center leading-relaxed">
+          목표 표현을 포함할수록 높은 점수를 받아요
+        </p>
+      </div>
+    ),
+  },
+  {
     emoji: '💡',
-    title: '도움이 필요하면\n힌트를 써요',
+    title: '막히면\n이렇게 해요',
     body: null,
     visual: (
       <div className="mt-4 space-y-3">
         {[
-          { icon: '💡', text: '힌트 버튼', sub: '어떻게 말할지 감이 안 올 때 — 단, 점수가 조금 깎여요' },
+          { icon: '💡', text: '힌트 자동 제공', sub: '틀렸을 때 자동으로 힌트가 나타나요 — 단, 점수가 깎여요' },
           { icon: '🔄', text: '복습 시스템', sub: '틀린 표현은 다음 게임에서 다시 출제돼요' },
-          { icon: '🏆', text: '레벨 성장', sub: 'XP를 쌓아 레벨을 올리고 칭호를 획득해요' },
+          { icon: '🏆', text: 'XP & 레벨', sub: '점수가 쌓일수록 레벨이 올라가요' },
         ].map(s => (
           <div key={s.icon} className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-3">
             <span className="text-xl w-7 shrink-0">{s.icon}</span>
@@ -138,7 +169,7 @@ export default function OnboardingModal({ onClose }: Props) {
             boxShadow: '0 0 24px rgba(245,158,11,0.25)',
           }}
         >
-          {isLast ? '▶  시작하기' : '다음'}
+          {isLast ? '▶  게임 시작하기' : '다음'}
         </button>
       </div>
     </div>
