@@ -7,6 +7,10 @@ type Props = {
   line: string
   ttsText: string | null
   onTTSEnd?: () => void
+  autoTranslate?: boolean
+  muted?: boolean
+  autoSpeak?: boolean   // false이면 타이프라이터 완료 후 자동 발화 안 함
+  difficulty?: string
 }
 
 type TranslateState = 'idle' | 'loading' | 'done' | 'error'
@@ -31,7 +35,7 @@ const NPC_BORDER: Record<string, string> = {
   CHEN:  'dialogue-box-CHEN',
 }
 
-const SPEEDS = [0.75, 1.0, 1.25, 1.5]
+const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
 const MAX_AUDIO_CACHE = 60
 // In-memory audio cache: cacheKey → object URL (insertion-order LRU via Map)
@@ -53,7 +57,7 @@ function setCached(key: string, url: string) {
   audioCache.set(key, url)
 }
 
-export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props) {
+export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd, autoTranslate = false, muted = false, autoSpeak = true, difficulty }: Props) {
   const [displayed, setDisplayed] = useState('')
   const [done, setDone] = useState(false)
   const [rate, setRate] = useState(1.0)
@@ -75,9 +79,8 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
     setTranslateState('idle')
   }, [line])
 
-  async function handleToggleKorean() {
-    if (showKorean) { setShowKorean(false); return }
-    if (korean)     { setShowKorean(true);  return }
+  async function fetchTranslation() {
+    if (korean) { setShowKorean(true); return }
     setTranslateState('loading')
     try {
       const res = await fetch('/api/translate', {
@@ -93,6 +96,16 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
       setTranslateState('error')
     }
   }
+
+  async function handleToggleKorean() {
+    if (showKorean) { setShowKorean(false); return }
+    await fetchTranslation()
+  }
+
+  // 초급 모드: 타이프라이터 완료 시 자동 번역
+  useEffect(() => {
+    if (done && autoTranslate) fetchTranslation()
+  }, [done, autoTranslate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Typewriter effect
   useEffect(() => {
@@ -161,15 +174,28 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
   }, [spokenText, onTTSEnd])
 
   const speak = useCallback(async (speedMult?: number) => {
+    if (muted) { onTTSEnd?.(); return }
     const mult = speedMult ?? rateRef.current
     const ok = await speakOpenAI(mult)
     if (!ok) speakWebSpeech(mult)
-  }, [speakOpenAI, speakWebSpeech])
+  }, [muted, speakOpenAI, speakWebSpeech, onTTSEnd])
 
-  // Auto-play when typewriter finishes
+  // Auto-play: 타이프라이터 완료 후 autoSpeak가 true가 되는 순간 발화
+  // done이 true인 상태에서 autoSpeak가 false→true로 바뀌는 경우도 커버
+  const speakRef = useRef(speak)
+  useEffect(() => { speakRef.current = speak }, [speak])
+
   useEffect(() => {
-    if (done) speak()
-  }, [done]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (done && autoSpeak) speakRef.current()
+  }, [done, autoSpeak])
+
+  // 음소거 상태가 켜지면 재생 중인 오디오 즉시 정지
+  useEffect(() => {
+    if (muted && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+  }, [muted])
 
   function changeSpeed(s: number) {
     setRate(s)
@@ -252,18 +278,20 @@ export default function NPCDialogue({ npcName, line, ttsText, onTTSEnd }: Props)
 
           <div className="flex-1" />
 
-          {/* 한국어 토글 */}
-          <button
-            onClick={handleToggleKorean}
-            disabled={translateState === 'loading'}
-            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
-              showKorean
-                ? 'bg-white/10 border-white/18 text-white/65'
-                : 'border-white/10 text-white/28 hover:text-white/58 hover:border-white/18'
-            }`}
-          >
-            {translateState === 'loading' ? '...' : '한국어'}
-          </button>
+          {/* 한국어 토글 — 어려움 모드에서는 숨김 */}
+          {difficulty !== 'hard' && (
+            <button
+              onClick={handleToggleKorean}
+              disabled={translateState === 'loading'}
+              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-40 ${
+                showKorean
+                  ? 'bg-white/10 border-white/18 text-white/65'
+                  : 'border-white/10 text-white/28 hover:text-white/58 hover:border-white/18'
+              }`}
+            >
+              {translateState === 'loading' ? '...' : '한국어'}
+            </button>
+          )}
 
           {translateState === 'error' && (
             <span className="text-[11px] text-red-400/60">오류</span>

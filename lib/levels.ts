@@ -9,16 +9,16 @@ export type LevelInfo = {
 }
 
 const LEVELS = [
-  { level: 1,  title: 'Nervous Tourist',      emoji: '🌍', minXP: 0     },
-  { level: 2,  title: 'Curious Traveler',      emoji: '✈️', minXP: 500   },
-  { level: 3,  title: 'Confident Explorer',    emoji: '🗺️', minXP: 1200  },
-  { level: 4,  title: 'Seasoned Adventurer',   emoji: '🎒', minXP: 2500  },
-  { level: 5,  title: 'Language Nomad',        emoji: '🌐', minXP: 4500  },
-  { level: 6,  title: 'Cultural Ambassador',   emoji: '🏆', minXP: 7000  },
-  { level: 7,  title: 'Global Citizen',        emoji: '⭐', minXP: 10000 },
-  { level: 8,  title: 'Master Linguist',       emoji: '👑', minXP: 14000 },
-  { level: 9,  title: 'World Wanderer',        emoji: '🌟', minXP: 19000 },
-  { level: 10, title: 'Legendary Traveler',    emoji: '🎯', minXP: 25000 },
+  { level: 1,  title: '첫 발걸음',      emoji: '🌍', minXP: 0     },
+  { level: 2,  title: '호기심 여행자',  emoji: '✈️', minXP: 500   },
+  { level: 3,  title: '당당한 탐험가',  emoji: '🗺️', minXP: 1200  },
+  { level: 4,  title: '베테랑 여행자',  emoji: '🎒', minXP: 2500  },
+  { level: 5,  title: '언어 유목민',    emoji: '🌐', minXP: 4500  },
+  { level: 6,  title: '문화 대사',      emoji: '🏆', minXP: 7000  },
+  { level: 7,  title: '세계 시민',      emoji: '⭐', minXP: 10000 },
+  { level: 8,  title: '언어 마스터',    emoji: '👑', minXP: 14000 },
+  { level: 9,  title: '세계 방랑자',    emoji: '🌟', minXP: 19000 },
+  { level: 10, title: '전설의 여행자',  emoji: '🎯', minXP: 25000 },
 ]
 
 export function calculateXP(totalScore: number, masteredCount: number, completedCount: number) {

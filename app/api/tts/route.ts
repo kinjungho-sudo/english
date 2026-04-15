@@ -3,8 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { SpeechCreateParams } from 'openai/resources/audio/speech'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
 type Voice = SpeechCreateParams['voice']
 
 const NPC_TTS: Record<string, { voice: Voice; speed: number }> = {
@@ -28,6 +26,7 @@ export async function POST(req: NextRequest) {
     const { text, npcName } = await req.json() as { text: string; npcName: string }
     if (!text) return NextResponse.json({ error: 'text required' }, { status: 400 })
 
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const { voice, speed } = NPC_TTS[npcName?.toUpperCase()] ?? DEFAULT_TTS
 
     const mp3 = await openai.audio.speech.create({

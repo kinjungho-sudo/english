@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/')
 
   const [{ data: profile }, { data: scenarios }, { data: progress }, { data: unmastered }, { data: mastered }] = await Promise.all([
-    supabase.from('profiles').select('character_name, avatar_emoji').eq('id', user.id).single(),
+    supabase.from('profiles').select('character_name, avatar_emoji, difficulty, tts_autoplay, hint_enabled').eq('id', user.id).single(),
     supabase.from('scenarios').select('*').order('order_index'),
     supabase.from('user_progress').select('*').eq('user_id', user.id),
     supabase.from('user_mistakes').select('*').eq('user_id', user.id).is('mastered_at', null),
@@ -23,6 +23,9 @@ export default async function DashboardPage() {
       user={user}
       characterName={profile.character_name}
       avatarEmoji={profile.avatar_emoji ?? '🧑‍💼'}
+      difficulty={profile.difficulty ?? 'normal'}
+      ttsAutoplay={profile.tts_autoplay ?? true}
+      hintEnabled={profile.hint_enabled ?? true}
       scenarios={scenarios ?? []}
       progress={progress ?? []}
       unmastered={unmastered ?? []}

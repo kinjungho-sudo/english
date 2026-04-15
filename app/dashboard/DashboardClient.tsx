@@ -24,9 +24,9 @@ type Props = {
 }
 
 const DIFFICULTIES = [
-  { key: 'easy',   label: '쉬움',   desc: '문법 오류 관대히',  color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.35)'  },
-  { key: 'normal', label: '보통',   desc: '표준 기준',         color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.35)'  },
-  { key: 'hard',   label: '어려움', desc: '정확한 표현만',      color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.35)' },
+  { key: 'easy',   label: '쉬움',   desc: '정답이 보임 · 따라 말하기',  color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.35)'  },
+  { key: 'normal', label: '보통',   desc: '힌트·번역 사용 가능',         color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.35)'  },
+  { key: 'hard',   label: '어려움', desc: '도움 없이 혼자 해결',          color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.35)' },
 ]
 
 const AVATARS = ['🧑‍💼', '👩‍✈️', '🧑‍🍳', '🧝', '🦸', '🧙', '👨‍🎓', '🧑‍🚀']

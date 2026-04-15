@@ -12,6 +12,7 @@ import type { Expression } from '@/lib/assets'
 import type { ChatMessage } from '@/app/api/chat/route'
 import { sfxForScore, sfxAdvance, sfxWarmup } from '@/lib/sfx'
 import { createClient } from '@/lib/supabase/client'
+import { useMute } from '@/lib/useMute'
 
 /* ─── 대화 히스토리 패널 ─── */
 type HistoryEntry = ChatMessage & { translation?: string; translating?: boolean }
@@ -163,9 +164,9 @@ type Props = {
 }
 
 const DIFFICULTY_OPTIONS = [
-  { key: 'easy',   label: '쉬움',   desc: '문법 오류 관대히',  color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)'  },
-  { key: 'normal', label: '보통',   desc: '표준 기준',         color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)'  },
-  { key: 'hard',   label: '어려움', desc: '정확한 표현만 정답', color: '#f87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)' },
+  { key: 'easy',   label: '쉬움',   desc: '정답이 보임 · 따라 말하기',  color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)'  },
+  { key: 'normal', label: '보통',   desc: '힌트·번역 사용 가능',         color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)'  },
+  { key: 'hard',   label: '어려움', desc: '도움 없이 혼자 해결',          color: '#f87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)' },
 ]
 
 const SCENE_FALLBACK_GRADIENT: Record<string, string> = {
@@ -188,19 +189,38 @@ const NPC_EMOJI: Record<string, string> = {
   CHEN:  '💊',
 }
 
+const NPC_PERSONALITY_KO: Record<string, string> = {
+  SARAH: '친절하고 활기찬 레스토랑 웨이트리스',
+  MIKE:  '전문적이고 능숙한 항공사 직원',
+  EMMA:  '우아하고 세심한 호텔 컨시어지',
+  LUCY:  '손님을 반기는 밝은 바리스타',
+  JAMES: '수다스럽고 친근한 택시 기사',
+  KATE:  '도움을 잘 주는 쇼핑몰 직원',
+  CHEN:  '지식이 풍부하고 친절한 약사',
+}
+
 const MAX_ATTEMPTS = 2
 
-function getReaction(pts: number): { label: string; color: string } | null {
-  if (pts >= 90) return { label: 'Perfect! ✨', color: '#f59e0b' }
-  if (pts >= 70) return { label: 'Great! 👍',   color: '#34d399' }
-  if (pts >= 30) return { label: 'Nice try 💪',  color: '#94a3b8' }
-  return            { label: 'Bad 😞',           color: '#f87171' }
+// AI 점수(0~100) → 게임 획득 점수
+function aiScoreToGamePts(aiScore: number, goalAchieved: boolean): number {
+  if (goalAchieved && aiScore >= 90) return 50  // Perfect
+  if (goalAchieved)                  return 40  // Good
+  if (aiScore >= 30)                 return 10  // Nice try
+  return 0                                      // Wrong
+}
+
+function getReaction(aiScore: number, goalAchieved: boolean): { label: string; color: string } {
+  if (goalAchieved && aiScore >= 90) return { label: 'Perfect! ✨', color: '#f59e0b' }
+  if (goalAchieved)                  return { label: 'Good! 👍',    color: '#34d399' }
+  if (aiScore >= 30)                 return { label: 'Nice try 💪',  color: '#94a3b8' }
+  return                                    { label: '다시 도전! 🔁', color: '#f87171' }
 }
 
 export default function GameScene({ scenario, steps, userId, mistakeStepIds, characterName, avatarEmoji, difficulty: initialDifficulty = 'normal' }: Props) {
   void userId
   const router = useRouter()
   const supabase = createClient()
+  const { muted, toggle: toggleMute } = useMute()
   const [difficulty, setDifficulty] = useState(initialDifficulty)
 
   async function handleDifficultyChange(d: string) {
@@ -215,6 +235,9 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
   const [showIntro, setShowIntro] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
+  // 게임 시작 2초 후 NPC 첫 발화 트리거
+  const [npcReady, setNpcReady] = useState(false)
+  const npcReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 첫 게임 여부: localStorage 'sq_tutorial_done' 없으면 튜토리얼 표시
   const [showTutorial, setShowTutorial] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -228,12 +251,13 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
   const [convHistory, setConvHistory] = useState<ChatMessage[]>([])
   const [attempt, setAttempt] = useState(0)
   const [npcResponse, setNpcResponse] = useState<string | null>(null)
-  const [pendingAdvance, setPendingAdvance] = useState(false)
+  const pendingAdvanceRef = useRef(false)   // ref로 관리 — onTTSEnd 클로저에서 최신값 보장
   const [lastFeedback, setLastFeedback] = useState<string | null>(null)
   const [lastCorrection, setLastCorrection] = useState<string | null>(null)
   const [lastGoalAchieved, setLastGoalAchieved] = useState(false)
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [lastNaturalExpression, setLastNaturalExpression] = useState<string | null>(null)
+  const [lastPartialPass, setLastPartialPass] = useState(false)
   const [scorePopup, setScorePopup] = useState<{ label: string; pts: number; color: string } | null>(null)
 
   const pendingScoreRef = useRef(0)
@@ -265,19 +289,25 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     })
   }, [scenario.id])
 
-  function resetStepState() {
+  function resetStepState(triggerSpeak = false) {
     setConvHistory([])
     setAttempt(0)
     setNpcResponse(null)
-    setPendingAdvance(false)
+    pendingAdvanceRef.current = false
     setLastFeedback(null)
     setLastCorrection(null)
     setLastGoalAchieved(false)
     setLastScore(null)
     setLastNaturalExpression(null)
+    setLastPartialPass(false)
     setExpression('neutral')
     setSceneError(false)
     setCharError(false)
+    // 다음 스텝 이동 시 NPC 즉시 발화 (false → true 토글로 useEffect 트리거)
+    if (triggerSpeak) {
+      setNpcReady(false)
+      setTimeout(() => setNpcReady(true), 0)
+    }
   }
 
   function handleNPCResponseEnd() {
@@ -289,7 +319,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
     }
     setNpcResponse(null)
 
-    if (pendingAdvance) {
+    if (pendingAdvanceRef.current) {
       goNext(pendingScoreRef.current)
     } else {
       // Stay on same step — reset to main image and re-enable input
@@ -300,7 +330,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
   function goNext(newScore: number) {
     if (!isLastStep) sfxAdvance()
-    resetStepState()
+    // 마지막 스텝이 아니면 다음 스텝 NPC 발화 트리거
+    resetStepState(!isLastStep)
     if (isLastStep) {
       saveProgress(orderedSteps.length, newScore, true)
       router.push(`/result/${scenario.id}?score=${newScore}&steps=${orderedSteps.length}`)
@@ -336,7 +367,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
       })
 
       const data = await res.json()
-      const pts = data.score ?? 50
+      const aiScore = data.score ?? 0
+      const pts = aiScoreToGamePts(aiScore, data.goalAchieved ?? false)
 
       // Korean input: don't count as attempt, don't add to score
       if (data.isKoreanInput) {
@@ -345,7 +377,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
         setLastGoalAchieved(false)
         setLastScore(0)
         if (data.npcResponse) {
-          setPendingAdvance(false)
+          pendingAdvanceRef.current = false
           setNpcResponse(data.npcResponse)
           fallbackTimerRef.current = setTimeout(() => {
             fallbackTimerRef.current = null
@@ -363,11 +395,12 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
       const newScore = score + pts
       setScore(newScore)
       pendingScoreRef.current = newScore
-      setExpression(scoreToExpression(pts, data.goalAchieved ?? true))
+      setExpression(scoreToExpression(aiScore, data.goalAchieved ?? true))
       setLastFeedback(data.feedback ?? null)
       setLastCorrection(data.correction ?? null)
       setLastGoalAchieved(data.goalAchieved ?? false)
-      setLastScore(pts)
+      setLastPartialPass(data.partialPass ?? false)
+      setLastScore(aiScore)
       setLastNaturalExpression(data.naturalExpression ?? null)
       setAttempt(nextAttempt)
 
@@ -378,22 +411,20 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
         ...(data.npcResponse ? [{ role: 'npc' as const, content: data.npcResponse }] : []),
       ])
 
-      sfxForScore(pts)
-      const reaction = getReaction(pts)
-      if (reaction) {
-        setScorePopup({ label: reaction.label, pts, color: reaction.color })
-        setTimeout(() => setScorePopup(null), 1600)
-      }
+      sfxForScore(aiScore)
+      const reaction = getReaction(aiScore, data.goalAchieved ?? false)
+      setScorePopup({ label: reaction.label, pts, color: reaction.color })
+      setTimeout(() => setScorePopup(null), 1600)
 
       if (data.npcResponse) {
-        setPendingAdvance(data.advanceToNext ?? false)
+        pendingAdvanceRef.current = data.advanceToNext ?? false
         setNpcResponse(data.npcResponse)
         fallbackTimerRef.current = setTimeout(() => {
           fallbackTimerRef.current = null
           if (!advancedRef.current) {
             advancedRef.current = true
             setNpcResponse(null)
-            if (data.advanceToNext) {
+            if (pendingAdvanceRef.current) {
               goNext(newScore)
             } else {
               // Stay on same step — reset to main image
@@ -421,9 +452,28 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
 
         {/* ── 시나리오 인트로 화면 ── */}
         {showIntro && (
-          <div className={`absolute inset-0 z-50 flex flex-col bg-gradient-to-b ${fallbackGradient}`}>
+          <div className="absolute inset-0 z-50 flex flex-col">
+            {/* 배경: 첫 번째 씬 이미지 */}
+            <div className="absolute inset-0">
+              {getSceneUrl(scenario.id, 1, 'neutral') && !sceneError ? (
+                <>
+                  <Image
+                    src={getSceneUrl(scenario.id, 1, 'neutral')!}
+                    alt={scenario.name}
+                    fill
+                    className="object-cover object-top"
+                    onError={() => setSceneError(true)}
+                    priority
+                  />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.2) 30%, rgba(0,0,0,0.75) 65%, rgba(0,0,0,0.97) 100%)' }} />
+                </>
+              ) : (
+                <div className={`absolute inset-0 bg-gradient-to-b ${fallbackGradient}`} />
+              )}
+            </div>
+
             {/* 상단 EXIT */}
-            <div className="shrink-0 px-5 pt-5">
+            <div className="relative shrink-0 px-5 pt-5">
               <button
                 onClick={() => router.push('/dashboard')}
                 className="flex items-center gap-1.5 text-white/35 hover:text-white/75 transition-colors group"
@@ -433,15 +483,11 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               </button>
             </div>
 
-            {/* NPC 이모지 */}
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-[96px] leading-none select-none opacity-80 drop-shadow-2xl">
-                {NPC_EMOJI[scenario.npc_name] ?? '🧑'}
-              </span>
-            </div>
+            {/* 여백 (이미지가 보이도록) */}
+            <div className="flex-1" />
 
             {/* 인트로 정보 카드 */}
-            <div className="shrink-0 px-5 pb-8 space-y-4 animate-fade-in-up">
+            <div className="relative shrink-0 px-5 pb-8 space-y-4 animate-fade-in-up">
               {/* 위치 레이블 */}
               <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(245,158,11,0.6)' }}>
                 {scenario.location}
@@ -453,7 +499,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
                   {scenario.thumbnail} {scenario.name}
                 </h1>
                 <p className="mt-2 text-sm" style={{ color: 'rgba(255,255,255,0.45)', lineHeight: '1.6' }}>
-                  {scenario.npc_personality}
+                  {NPC_PERSONALITY_KO[scenario.npc_name] ?? scenario.npc_personality}
                 </p>
               </div>
 
@@ -504,6 +550,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
                 onClick={() => {
                   sfxWarmup()
                   setShowIntro(false)
+                  // 2초 후 NPC 첫 발화 트리거
+                  npcReadyTimerRef.current = setTimeout(() => setNpcReady(true), 2000)
                   // 첫 게임이면 튜토리얼 표시
                   if (typeof window !== 'undefined' && !localStorage.getItem('sq_tutorial_done')) {
                     setShowTutorial(true)
@@ -610,6 +658,25 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             </div>
 
             <div className="flex items-center gap-2">
+              {/* 음소거 토글 */}
+              <button
+                onClick={toggleMute}
+                className="flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:bg-white/10 active:scale-95"
+                style={{ color: muted ? 'rgba(248,113,113,0.8)' : 'rgba(255,255,255,0.35)' }}
+                title={muted ? '음소거 해제' : '음소거'}
+              >
+                {muted ? (
+                  // 음소거 아이콘
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                  </svg>
+                ) : (
+                  // 스피커 아이콘
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                  </svg>
+                )}
+              </button>
               {/* 대화 기록 버튼 */}
               <button
                 onClick={() => setShowHistory(true)}
@@ -651,42 +718,40 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
         {/* ── 하단 대화 영역 ── */}
         <div className="relative z-10 shrink-0 px-4 pb-5 space-y-2">
 
-          {/* 시도 횟수 도트 (첫 번째 시도 이후) */}
-          {attempt > 0 && !npcResponse && (
+          {/* 시도 횟수 도트 — wrong(0~29)이고 아직 retry 가능할 때만 표시 */}
+          {attempt > 0 && !npcResponse && !lastGoalAchieved && !lastPartialPass && (
             <div className="flex items-center justify-center gap-2">
-              {Array.from({ length: MAX_ATTEMPTS }, (_, i) => {
-                const isUsed = i < attempt
-                const isLast = i === attempt - 1
-                const isDone = isLast && lastGoalAchieved
-                return (
-                  <div
-                    key={i}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${
-                      isDone        ? 'bg-green-400 scale-125' :
-                      isUsed        ? 'bg-white/25' :
-                      i === attempt ? 'bg-amber-400 animate-pulse scale-110' :
-                                      'bg-white/10'
-                    }`}
-                  />
-                )
-              })}
+              {Array.from({ length: MAX_ATTEMPTS }, (_, i) => (
+                <div
+                  key={i}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    i < attempt   ? 'bg-red-400/50' :
+                    i === attempt ? 'bg-amber-400 animate-pulse scale-110' :
+                                    'bg-white/10'
+                  }`}
+                />
+              ))}
               <span className="text-white/25 text-[10px] ml-1 tracking-wide">
-                {attempt >= MAX_ATTEMPTS ? '마지막 시도' : `${attempt} / ${MAX_ATTEMPTS}`}
+                {attempt >= MAX_ATTEMPTS ? '마지막 시도' : `다시 시도 (${MAX_ATTEMPTS - attempt}번 남음)`}
               </span>
             </div>
           )}
 
-          {/* 피드백 패널 — 점수별 스타일 */}
+          {/* 피드백 패널 */}
           {lastFeedback && !npcResponse && attempt > 0 && !lastGoalAchieved && (
             (() => {
-              const isWrong = lastScore === 0
-              const isTried = lastScore !== null && lastScore > 0 && lastScore < 70
+              const isWrong = !lastPartialPass
               return (
                 <div className="rounded-xl px-4 py-2.5 space-y-1 animate-fade-in-up" style={{
-                  background: isWrong ? 'rgba(239,68,68,0.07)' : isTried ? 'rgba(245,158,11,0.07)' : 'rgba(0,0,0,0.4)',
-                  border: `1px solid ${isWrong ? 'rgba(239,68,68,0.2)' : isTried ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.07)'}`,
+                  background: isWrong ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.07)',
+                  border: `1px solid ${isWrong ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
                 }}>
-                  <p className={`text-[12px] leading-relaxed ${isWrong ? 'text-red-300/70' : isTried ? 'text-amber-200/70' : 'text-white/55'}`}>
+                  {lastPartialPass && (
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(245,158,11,0.55)' }}>
+                      유사 표현 인정 — 다음 단계로 진행
+                    </p>
+                  )}
+                  <p className={`text-[12px] leading-relaxed ${isWrong ? 'text-red-300/70' : 'text-amber-200/70'}`}>
                     {lastFeedback}
                   </p>
                   {lastCorrection && (
@@ -699,8 +764,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             })()
           )}
 
-          {/* 힌트 + 넘어가기 — 완전 오답 즉시 표시, 또는 2회 이상 실패 */}
-          {((lastScore === 0 && attempt >= 1) || attempt >= 2) && !npcResponse && !lastGoalAchieved && currentStep.hint_template && (
+          {/* 힌트 + 넘어가기 — wrong이고 MAX_ATTEMPTS 모두 소진 시에만 */}
+          {attempt >= MAX_ATTEMPTS && !npcResponse && !lastGoalAchieved && !lastPartialPass && currentStep.hint_template && (
             <div className="rounded-xl px-4 py-3 space-y-2.5 animate-fade-in-up"
               style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}>
               <div className="flex items-start gap-2">
@@ -718,27 +783,6 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
             </div>
           )}
 
-          {/* 학습 목표 키워드 스트립 — 채점 기준 명시 */}
-          {currentStep.expected_keywords.length > 0 && !npcResponse && (
-            <div className="flex items-center gap-2 px-1 animate-fade-in-up">
-              <span className="text-[10px] font-bold tracking-wider uppercase shrink-0" style={{ color: 'rgba(245,158,11,0.4)' }}>🎯 목표</span>
-              <div className="flex flex-wrap gap-1.5">
-                {currentStep.expected_keywords.map((kw, i) => (
-                  <span
-                    key={i}
-                    className="text-[11px] font-mono px-2 py-0.5 rounded-md"
-                    style={{
-                      background: 'rgba(245,158,11,0.07)',
-                      border: '1px solid rgba(245,158,11,0.15)',
-                      color: 'rgba(255,255,255,0.35)',
-                    }}
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* 추천 표현 — 통과했지만 90점 미만일 때 NPC 응답과 함께 표시 */}
           {npcResponse && lastGoalAchieved && lastScore !== null && lastScore < 90 && lastNaturalExpression && (
@@ -762,12 +806,20 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               line={npcResponse}
               ttsText={npcResponse}
               onTTSEnd={handleNPCResponseEnd}
+              autoTranslate={difficulty === 'easy'}
+              muted={muted}
+              autoSpeak={npcReady}
+              difficulty={difficulty}
             />
           ) : (
             <NPCDialogue
               npcName={scenario.npc_name}
               line={currentNpcLine}
               ttsText={currentStep.tts_text ?? currentNpcLine}
+              autoTranslate={difficulty === 'easy'}
+              muted={muted}
+              autoSpeak={npcReady}
+              difficulty={difficulty}
             />
           )}
 
@@ -780,6 +832,8 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
               disabled={loading}
               characterName={characterName}
               avatarEmoji={avatarEmoji}
+              easyKeywords={difficulty === 'easy' ? currentStep.expected_keywords : undefined}
+              difficulty={difficulty}
             />
           )}
         </div>

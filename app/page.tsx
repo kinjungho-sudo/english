@@ -2,59 +2,143 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 
-function derivePassword(email: string): string {
-  return btoa(`ts_${email}_travelspeak2026`).slice(0, 72)
-}
-
-function CitySilhouette() {
+/* ─── 떠다니는 구름 모양 SVG ─── */
+function CloudLayer() {
   return (
-    <div className="absolute bottom-0 left-0 right-0 pointer-events-none select-none" style={{ opacity: 0.14 }}>
-      <svg viewBox="0 0 420 88" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" style={{ display: 'block', width: '100%' }}>
-        <path
-          fill="rgba(245,158,11,0.75)"
-          d="M0,88 L0,62 L12,62 L12,48 L16,48 L16,42 L22,42 L22,48 L26,48 L26,36 L30,36 L30,30 L34,30 L34,36 L38,36 L38,55 L44,55 L44,38 L48,38 L48,32 L53,32 L53,26 L57,26 L57,20 L61,20 L61,26 L65,26 L65,32 L69,32 L69,44 L76,44 L76,36 L81,36 L81,55 L89,55 L89,38 L93,38 L93,28 L97,28 L97,22 L101,22 L101,17 L105,17 L105,12 L109,12 L109,17 L113,17 L113,22 L117,22 L117,34 L124,34 L124,50 L132,50 L132,40 L137,40 L137,35 L142,35 L142,40 L147,40 L147,33 L152,33 L152,28 L156,28 L156,22 L160,22 L160,28 L164,28 L164,36 L170,36 L170,50 L178,50 L178,40 L183,40 L183,32 L188,32 L188,26 L192,26 L192,19 L196,19 L196,13 L200,13 L200,8 L204,8 L204,13 L208,13 L208,19 L212,19 L212,28 L217,28 L217,40 L224,40 L224,50 L232,50 L232,36 L237,36 L237,30 L242,30 L242,36 L247,36 L247,44 L254,44 L254,55 L262,55 L262,38 L267,38 L267,28 L272,28 L272,22 L276,22 L276,28 L280,28 L280,38 L286,38 L286,55 L294,55 L294,43 L299,43 L299,36 L304,36 L304,43 L309,43 L309,36 L314,36 L314,28 L318,28 L318,22 L322,22 L322,28 L327,28 L327,40 L334,40 L334,54 L342,54 L342,40 L347,40 L347,46 L352,46 L352,54 L360,54 L360,38 L365,38 L365,30 L370,30 L370,38 L375,38 L375,47 L382,47 L382,56 L392,56 L392,66 L402,66 L402,73 L420,73 L420,88 Z"
-        />
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
+      {/* 왼쪽 산 실루엣 */}
+      <svg className="absolute bottom-0 left-0" width="55%" viewBox="0 0 320 220" fill="none" preserveAspectRatio="xMinYMax meet">
+        <path d="M0 220 L0 140 L40 100 L70 120 L110 60 L150 90 L180 40 L210 80 L250 50 L280 70 L320 30 L320 220Z" fill="url(#mountainLeft)" />
+        <defs>
+          <linearGradient id="mountainLeft" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0f172a" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#020617" stopOpacity="1" />
+          </linearGradient>
+        </defs>
       </svg>
+      {/* 오른쪽 산 실루엣 */}
+      <svg className="absolute bottom-0 right-0" width="55%" viewBox="0 0 320 220" fill="none" preserveAspectRatio="xMaxYMax meet">
+        <path d="M320 220 L320 100 L280 130 L240 80 L200 110 L160 50 L120 85 L80 45 L40 75 L0 20 L0 220Z" fill="url(#mountainRight)" />
+        <defs>
+          <linearGradient id="mountainRight" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0f172a" stopOpacity="0.85" />
+            <stop offset="100%" stopColor="#020617" stopOpacity="1" />
+          </linearGradient>
+        </defs>
+      </svg>
+      {/* 지평선 안개 */}
+      <div
+        className="absolute bottom-0 left-0 right-0"
+        style={{
+          height: '38%',
+          background: 'linear-gradient(to top, rgba(2,6,23,1) 0%, rgba(15,23,42,0.6) 40%, transparent 100%)',
+        }}
+      />
     </div>
   )
 }
 
+/* ─── 별똥별 ─── */
+function ShootingStar({ style }: { style: React.CSSProperties }) {
+  return (
+    <div
+      className="absolute animate-shooting-star"
+      style={{
+        width: '120px',
+        height: '1.5px',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), rgba(255,255,255,0.4), transparent)',
+        borderRadius: '9999px',
+        ...style,
+      }}
+    />
+  )
+}
+
+/* ─── 북극광 (오로라) 레이어 ─── */
+function Aurora() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+      <div
+        className="absolute animate-aurora-1"
+        style={{
+          top: '8%', left: '-20%', width: '80%', height: '35%',
+          background: 'radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.07) 40%, transparent 70%)',
+          filter: 'blur(30px)',
+          borderRadius: '50%',
+        }}
+      />
+      <div
+        className="absolute animate-aurora-2"
+        style={{
+          top: '15%', right: '-15%', width: '65%', height: '30%',
+          background: 'radial-gradient(ellipse, rgba(16,185,129,0.09) 0%, rgba(6,182,212,0.06) 40%, transparent 70%)',
+          filter: 'blur(35px)',
+          borderRadius: '50%',
+        }}
+      />
+      <div
+        className="absolute animate-aurora-3"
+        style={{
+          top: '5%', left: '20%', width: '60%', height: '25%',
+          background: 'radial-gradient(ellipse, rgba(245,158,11,0.06) 0%, rgba(251,146,60,0.04) 40%, transparent 70%)',
+          filter: 'blur(25px)',
+          borderRadius: '50%',
+        }}
+      />
+    </div>
+  )
+}
+
+/* ─── 메인 컴포넌트 ─── */
 export default function GameLoginPage() {
-  const router = useRouter()
   const supabase = createClient()
 
-  type SplashState = 'idle' | 'out' | 'done'
-  const [splashState, setSplashState] = useState<SplashState>('idle')
-  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  type Phase = 'title' | 'leaving' | 'login'
+  const [phase, setPhase] = useState<Phase>('title')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [tab, setTab] = useState<'email' | 'signup'>('email')
-  const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
-  const [stars, setStars] = useState<{ x: number; y: number; size: number; delay: number; drift: boolean; dx: number }[]>([])
+
+  /* 별 / 파티클 */
+  type Star = { x: number; y: number; size: number; delay: number; speed: number }
+  type Particle = { x: number; y: number; size: number; delay: number; dx: number }
+  type Shooting = { top: number; left: number; angle: number; delay: number; dur: number }
+
+  const [stars, setStars] = useState<Star[]>([])
+  const [particles, setParticles] = useState<Particle[]>([])
+  const [shootings, setShootings] = useState<Shooting[]>([])
 
   useEffect(() => {
-    // Math.random()은 클라이언트에서만 실행해야 hydration mismatch를 방지
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStars(
-      Array.from({ length: 70 }, (_, i) => ({
-        x: Math.random() * 100,
-        y: i < 14 ? 70 + Math.random() * 28 : Math.random() * 85,
-        size: Math.random() * 2 + 0.5,
-        delay: Math.random() * 5,
-        drift: i < 14,
-        dx: i < 14 ? (Math.random() - 0.5) * 50 : 0,
-      }))
-    )
-    return () => { if (tapTimerRef.current) clearTimeout(tapTimerRef.current) }
+    setStars(Array.from({ length: 90 }, () => ({
+      x: Math.random() * 100,
+      y: Math.random() * 80,
+      size: Math.random() * 2.2 + 0.4,
+      delay: Math.random() * 6,
+      speed: Math.random() * 3 + 2,
+    })))
+    setParticles(Array.from({ length: 20 }, () => ({
+      x: Math.random() * 100,
+      y: 55 + Math.random() * 35,
+      size: Math.random() * 3 + 1.5,
+      delay: Math.random() * 6,
+      dx: (Math.random() - 0.5) * 70,
+    })))
+    setShootings(Array.from({ length: 4 }, () => ({
+      top: Math.random() * 35,
+      left: Math.random() * 70,
+      angle: -20 + Math.random() * -20,
+      delay: Math.random() * 8,
+      dur: 1.2 + Math.random() * 1.2,
+    })))
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [])
 
   function handleTap() {
-    setSplashState('out')
-    tapTimerRef.current = setTimeout(() => setSplashState('done'), 280)
+    if (phase !== 'title') return
+    setPhase('leaving')
+    timerRef.current = setTimeout(() => setPhase('login'), 350)
   }
 
   async function handleGoogleLogin() {
@@ -71,329 +155,398 @@ export default function GameLoginPage() {
     }
   }
 
-  async function handleEnter(e: { preventDefault(): void }) {
-    e.preventDefault()
-    if (!email.trim()) return
-    setLoading(true)
-    setError('')
-
-    const password = derivePassword(email.trim())
-
-    const { error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (!loginErr) { router.push('/dashboard'); router.refresh(); return }
-
-    const { data: signupData, error: signupErr } = await supabase.auth.signUp({ email: email.trim(), password })
-
-    if (signupErr) {
-      if (signupErr.message?.toLowerCase().includes('already registered')) {
-        const res = await fetch('/api/auth/sync-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), password }),
-        })
-        const { ok, reason } = await res.json()
-        if (!ok) { setError(`계정 복구 실패 (${reason ?? 'unknown'})`); setLoading(false); return }
-        const { error: retryErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        if (!retryErr) { router.push('/dashboard'); router.refresh(); return }
-        setError(`로그인 실패: ${retryErr.message}`)
-        setLoading(false)
-        return
-      }
-      setError('오류: ' + signupErr.message)
-      setLoading(false)
-      return
-    }
-
-    if (signupData.session) { router.push('/dashboard'); router.refresh(); return }
-
-    const { error: retryErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (!retryErr) {
-      router.push('/dashboard')
-      router.refresh()
-    } else {
-      setError('Supabase → Authentication → Email → Confirm email 을 OFF 해주세요.')
-      setLoading(false)
-    }
-  }
-
   return (
-    <div className="game-wrap" style={{ background: '#050508' }}>
+    <div className="game-wrap" style={{ background: '#020617' }}>
       <div
-        className="game-card flex flex-col items-center justify-center"
-        style={{ background: 'radial-gradient(ellipse at 50% 0%, #1a0a00 0%, #0a0a0f 60%, #000 100%)' }}
+        className="game-card"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 0%, #0d1b4b 0%, #060d1f 45%, #020617 100%)',
+          overflow: 'hidden',
+        }}
       >
-        {/* Stars + Drifting particles */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {stars.map((s, i) =>
-            s.drift ? (
-              <div
-                key={i}
-                className="absolute rounded-full animate-particle-drift"
-                style={{
-                  left: `${s.x}%`,
-                  bottom: `${s.y - 70}%`,
-                  width: `${s.size + 1.5}px`,
-                  height: `${s.size + 1.5}px`,
-                  background: 'radial-gradient(circle, rgba(245,158,11,0.9), rgba(245,158,11,0.15) 60%, transparent)',
-                  '--dur': `${4 + s.delay * 0.7}s`,
-                  '--delay': `${s.delay}s`,
-                  '--dx': `${s.dx}px`,
-                } as React.CSSProperties}
-              />
-            ) : (
-              <div
-                key={i}
-                className="absolute rounded-full bg-white"
-                style={{
-                  left: `${s.x}%`, top: `${s.y}%`,
-                  width: `${s.size}px`, height: `${s.size}px`,
-                  opacity: 0.28,
-                  animation: `pulse ${2 + s.delay}s ease-in-out infinite`,
-                  animationDelay: `${s.delay}s`,
-                }}
-              />
-            )
-          )}
+
+        {/* ── 0. 오로라 ── */}
+        <Aurora />
+
+        {/* ── 1. 별 레이어 ── */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 2 }}>
+          {stars.map((s, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full"
+              style={{
+                left: `${s.x}%`, top: `${s.y}%`,
+                width: `${s.size}px`, height: `${s.size}px`,
+                background: s.size > 1.8
+                  ? 'radial-gradient(circle, #fff 0%, rgba(200,220,255,0.6) 50%, transparent)'
+                  : 'rgba(255,255,255,0.75)',
+                animation: `starTwinkle ${s.speed}s ease-in-out infinite`,
+                animationDelay: `${s.delay}s`,
+                boxShadow: s.size > 1.6 ? `0 0 ${s.size * 3}px rgba(180,200,255,0.5)` : 'none',
+              }}
+            />
+          ))}
         </div>
 
-        {/* Glow orb */}
+        {/* ── 2. 별똥별 ── */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 3 }}>
+          {shootings.map((sh, i) => (
+            <ShootingStar
+              key={i}
+              style={{
+                top: `${sh.top}%`,
+                left: `${sh.left}%`,
+                transform: `rotate(${sh.angle}deg)`,
+                animationDelay: `${sh.delay}s`,
+                animationDuration: `${sh.dur}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* ── 3. 황금 파티클 (하단 상승) ── */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 4 }}>
+          {particles.map((p, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full animate-gold-rise"
+              style={{
+                left: `${p.x}%`,
+                bottom: `${p.y - 55}%`,
+                width: `${p.size}px`,
+                height: `${p.size}px`,
+                background: 'radial-gradient(circle, rgba(251,191,36,1), rgba(245,158,11,0.3) 60%, transparent)',
+                boxShadow: '0 0 6px rgba(251,191,36,0.6)',
+                '--dur': `${5 + p.delay * 0.6}s`,
+                '--delay': `${p.delay}s`,
+                '--dx': `${p.dx}px`,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+
+        {/* ── 4. 산 실루엣 ── */}
+        <CloudLayer />
+
+        {/* ── 중앙 글로우 ── */}
         <div
-          className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(251,146,60,0.07) 0%, transparent 70%)' }}
+          className="absolute pointer-events-none"
+          style={{
+            zIndex: 5,
+            top: '30%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '340px', height: '340px',
+            background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, rgba(245,158,11,0.05) 40%, transparent 70%)',
+            filter: 'blur(1px)',
+          }}
         />
 
-        {/* City silhouette */}
-        <CitySilhouette />
-
-        {/* TAP TO BEGIN splash */}
-        {splashState !== 'done' && (
+        {/* ════════════════════════════════
+            TITLE SCREEN
+        ════════════════════════════════ */}
+        {phase !== 'login' && (
           <div
-            className={`absolute inset-0 z-20 flex flex-col items-center justify-center cursor-pointer px-6 ${splashState === 'out' ? 'animate-splash-out pointer-events-none' : ''}`}
             onClick={handleTap}
+            className={`absolute inset-0 flex flex-col items-center justify-center cursor-pointer select-none ${phase === 'leaving' ? 'animate-title-leave' : ''}`}
+            style={{ zIndex: 20 }}
           >
-            {/* Logo emblem */}
-            <div className="relative text-center mb-10">
-              <div className="relative inline-flex items-center justify-center mb-5">
-                {/* Concentric rings */}
+            {/* 메인 로고 */}
+            <div className="relative flex flex-col items-center">
+
+              {/* 회전 링 */}
+              <div className="relative flex items-center justify-center mb-6" style={{ width: '120px', height: '120px' }}>
+                {/* 바깥 회전 링 */}
                 <div
-                  className="absolute rounded-full pointer-events-none"
-                  style={{ width: '118px', height: '118px', border: '1px solid rgba(245,158,11,0.1)' }}
+                  className="absolute inset-0 rounded-full animate-ring-spin"
+                  style={{
+                    border: '1.5px solid transparent',
+                    background: 'linear-gradient(#020617, #020617) padding-box, conic-gradient(from 0deg, rgba(245,158,11,0.8), rgba(245,158,11,0.05), rgba(245,158,11,0.8)) border-box',
+                  }}
                 />
+                {/* 중간 링 */}
                 <div
-                  className="absolute rounded-full pointer-events-none"
-                  style={{ width: '94px', height: '94px', border: '1px solid rgba(245,158,11,0.18)' }}
+                  className="absolute rounded-full animate-ring-spin-reverse"
+                  style={{
+                    width: '92px', height: '92px',
+                    border: '1px solid transparent',
+                    background: 'linear-gradient(#020617, #020617) padding-box, conic-gradient(from 90deg, rgba(99,102,241,0.6), rgba(99,102,241,0.05), rgba(99,102,241,0.6)) border-box',
+                  }}
                 />
-                {/* Core badge */}
+                {/* 코어 */}
                 <div
                   style={{
-                    width: '72px', height: '72px',
+                    width: '70px', height: '70px',
                     borderRadius: '50%',
-                    background: 'radial-gradient(circle at 40% 35%, rgba(245,158,11,0.18), rgba(245,158,11,0.03) 70%)',
-                    border: '1.5px solid rgba(245,158,11,0.35)',
-                    boxShadow: '0 0 30px rgba(245,158,11,0.12), inset 0 1px 0 rgba(245,158,11,0.2)',
+                    background: 'radial-gradient(circle at 40% 35%, rgba(99,102,241,0.25), rgba(245,158,11,0.12) 50%, rgba(2,6,23,0.9) 75%)',
+                    border: '1.5px solid rgba(245,158,11,0.5)',
+                    boxShadow: '0 0 30px rgba(245,158,11,0.25), 0 0 60px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.15)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    position: 'relative',
+                    zIndex: 2,
                   }}
                 >
-                  <span style={{ fontSize: '30px' }}>✈️</span>
+                  <span style={{ fontSize: '28px', filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.8))' }}>✈️</span>
                 </div>
+                {/* 코어 글로우 펄스 */}
+                <div
+                  className="absolute rounded-full animate-core-pulse"
+                  style={{
+                    width: '70px', height: '70px',
+                    background: 'radial-gradient(circle, rgba(245,158,11,0.15), transparent 70%)',
+                    zIndex: 1,
+                  }}
+                />
               </div>
 
-              {/* Title with scanline */}
-              <div className="relative inline-block">
-                <h1
-                  className="text-4xl font-black tracking-widest uppercase"
+              {/* 타이틀 텍스트 */}
+              <div className="relative text-center">
+                {/* TRAVEL */}
+                <div
+                  className="block font-black leading-none tracking-[0.12em] animate-title-glow"
                   style={{
-                    color: '#f59e0b',
-                    textShadow: '0 0 24px rgba(245,158,11,0.55), 0 0 60px rgba(245,158,11,0.15)',
-                    letterSpacing: '0.16em',
+                    fontSize: 'clamp(32px, 10vw, 44px)',
+                    color: '#fff',
+                    textShadow: '0 0 20px rgba(255,255,255,0.3)',
+                    letterSpacing: '0.18em',
                   }}
                 >
-                  Scene Quest
-                </h1>
+                  TRAVEL
+                </div>
+                {/* QUEST — 그라디언트 */}
+                <div
+                  className="block font-black leading-none tracking-[0.18em]"
+                  style={{
+                    fontSize: 'clamp(38px, 12vw, 52px)',
+                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 30%, #fde68a 55%, #f59e0b 75%, #d97706 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    filter: 'drop-shadow(0 0 16px rgba(245,158,11,0.6))',
+                    letterSpacing: '0.2em',
+                  }}
+                >
+                  QUEST
+                </div>
+                {/* 스캔라인 */}
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
                   <div
                     className="absolute left-0 right-0 animate-scanline-sweep"
                     style={{
                       height: '2px',
-                      background: 'linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.7) 40%, rgba(255,255,255,0.5) 50%, rgba(245,158,11,0.7) 60%, transparent 100%)',
+                      background: 'linear-gradient(90deg, transparent, rgba(251,191,36,0.85) 40%, rgba(255,255,255,0.7) 50%, rgba(251,191,36,0.85) 60%, transparent)',
                     }}
                   />
                 </div>
               </div>
 
-              <p className="text-xs tracking-[0.35em] uppercase font-medium mt-2"
-                style={{ color: 'rgba(180,83,9,0.5)' }}>
-                AI English Adventure
-              </p>
+              {/* 부제 */}
+              <div className="flex items-center gap-3 mt-4">
+                <div className="h-px w-10" style={{ background: 'linear-gradient(to right, transparent, rgba(245,158,11,0.5))' }} />
+                <p
+                  className="text-[10px] tracking-[0.45em] uppercase font-semibold"
+                  style={{ color: 'rgba(251,191,36,0.6)' }}
+                >
+                  AI English Adventure
+                </p>
+                <div className="h-px w-10" style={{ background: 'linear-gradient(to left, transparent, rgba(245,158,11,0.5))' }} />
+              </div>
 
-              <div className="mt-4 flex items-center justify-center gap-3">
-                <div className="h-px w-14" style={{ background: 'linear-gradient(to right, transparent, rgba(180,83,9,0.4))' }} />
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'rgba(180,83,9,0.4)' }} />
-                <div className="h-px w-14" style={{ background: 'linear-gradient(to left, transparent, rgba(180,83,9,0.4))' }} />
+              {/* 스탯 뱃지 3개 */}
+              <div className="flex gap-3 mt-6">
+                {[
+                  { icon: '🍽️', label: 'Restaurant' },
+                  { icon: '✈️', label: 'Airport' },
+                  { icon: '🏨', label: 'Hotel' },
+                ].map((b) => (
+                  <div
+                    key={b.label}
+                    className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl"
+                    style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      backdropFilter: 'blur(8px)',
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>{b.icon}</span>
+                    <span className="text-[9px] tracking-wider uppercase font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      {b.label}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* TAP TO BEGIN */}
-            <div className="text-center mt-6">
-              <p className="font-black text-xs tracking-[0.5em] uppercase animate-tap-blink"
-                style={{ color: 'rgba(245,158,11,0.7)' }}>
-                ▶ TAP TO BEGIN
+            <div className="mt-12 flex flex-col items-center gap-3">
+              {/* 아래쪽 펄스 원 */}
+              <div className="relative flex items-center justify-center">
+                <div
+                  className="absolute rounded-full animate-ping-slow"
+                  style={{ width: '52px', height: '52px', background: 'rgba(245,158,11,0.12)' }}
+                />
+                <div
+                  className="absolute rounded-full animate-ping-slow"
+                  style={{ width: '36px', height: '36px', background: 'rgba(245,158,11,0.1)', animationDelay: '0.4s' }}
+                />
+                <div
+                  className="rounded-full flex items-center justify-center"
+                  style={{
+                    width: '26px', height: '26px',
+                    background: 'linear-gradient(135deg, rgba(245,158,11,0.3), rgba(245,158,11,0.1))',
+                    border: '1px solid rgba(245,158,11,0.5)',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: 'rgba(245,158,11,0.9)' }}>▼</span>
+                </div>
+              </div>
+              <p
+                className="animate-tap-blink text-[11px] font-black tracking-[0.55em] uppercase"
+                style={{ color: 'rgba(245,158,11,0.75)' }}
+              >
+                TAP TO BEGIN
               </p>
             </div>
           </div>
         )}
 
-        {/* Login form — slides up after tap */}
-        {splashState === 'done' && (
-          <div className="relative z-10 w-full max-w-xs flex flex-col items-center px-6 animate-form-slide-up">
-
-            {/* Compact emblem + title */}
-            <div className="text-center mb-8">
-              <div className="relative inline-flex items-center justify-center mb-3">
+        {/* ════════════════════════════════
+            LOGIN SCREEN
+        ════════════════════════════════ */}
+        {phase === 'login' && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center animate-login-enter"
+            style={{ zIndex: 20, padding: '24px' }}
+          >
+            {/* 미니 로고 */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="relative flex items-center justify-center mb-4" style={{ width: '64px', height: '64px' }}>
                 <div
-                  className="absolute rounded-full pointer-events-none"
-                  style={{ width: '66px', height: '66px', border: '1px solid rgba(245,158,11,0.16)' }}
+                  className="absolute inset-0 rounded-full animate-ring-spin"
+                  style={{
+                    border: '1px solid transparent',
+                    background: 'linear-gradient(#020617, #020617) padding-box, conic-gradient(from 0deg, rgba(245,158,11,0.7), rgba(245,158,11,0.05), rgba(245,158,11,0.7)) border-box',
+                  }}
                 />
-
                 <div
                   style={{
-                    width: '50px', height: '50px',
+                    width: '46px', height: '46px',
                     borderRadius: '50%',
-                    background: 'radial-gradient(circle at 40% 35%, rgba(245,158,11,0.14), rgba(245,158,11,0.02) 70%)',
-                    border: '1px solid rgba(245,158,11,0.26)',
-                    boxShadow: '0 0 18px rgba(245,158,11,0.09)',
+                    background: 'radial-gradient(circle at 40% 35%, rgba(99,102,241,0.2), rgba(2,6,23,0.85))',
+                    border: '1px solid rgba(245,158,11,0.4)',
+                    boxShadow: '0 0 18px rgba(245,158,11,0.2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  <span style={{ fontSize: '20px' }}>✈️</span>
+                  <span style={{ fontSize: '18px' }}>✈️</span>
                 </div>
               </div>
 
-              <div className="relative inline-block">
-                <h1
-                  className="text-3xl font-black tracking-widest uppercase"
-                  style={{
-                    color: '#f59e0b',
-                    textShadow: '0 0 20px rgba(245,158,11,0.45)',
-                    letterSpacing: '0.14em',
-                  }}
-                >
-                  Scene Quest
-                </h1>
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                  <div
-                    className="absolute left-0 right-0 animate-scanline-sweep"
-                    style={{
-                      height: '2px',
-                      background: 'linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.65) 40%, rgba(255,255,255,0.4) 50%, rgba(245,158,11,0.65) 60%, transparent 100%)',
-                    }}
-                  />
-                </div>
+              <div
+                className="font-black tracking-[0.2em] leading-none"
+                style={{
+                  fontSize: '22px',
+                  background: 'linear-gradient(135deg, #fbbf24, #fde68a, #f59e0b)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.5))',
+                  letterSpacing: '0.22em',
+                }}
+              >
+                TRAVEL QUEST
               </div>
-
-              <p className="text-[10px] tracking-[0.28em] uppercase font-medium mt-1"
-                style={{ color: 'rgba(180,83,9,0.4)' }}>
+              <p className="text-[9px] tracking-[0.4em] uppercase mt-1 font-medium" style={{ color: 'rgba(251,191,36,0.45)' }}>
                 AI English Adventure
               </p>
             </div>
 
-            {/* Google 로그인 */}
-            <button
-              onClick={handleGoogleLogin}
-              disabled={googleLoading || loading}
-              className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 mb-4 font-bold text-sm transition-all disabled:opacity-40 hover:scale-[1.02] active:scale-[0.98]"
+            {/* 유리 카드 */}
+            <div
+              className="w-full"
               style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: 'rgba(255,255,255,0.85)',
+                maxWidth: '320px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '24px',
+                padding: '28px 24px',
+                backdropFilter: 'blur(20px)',
+                boxShadow: '0 0 60px rgba(99,102,241,0.08), 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
               }}
             >
-              {googleLoading ? (
-                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', letterSpacing: '0.15em' }}>CONNECTING...</span>
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  <span>Google로 계속하기</span>
-                </>
-              )}
-            </button>
+              {/* 안내 문구 */}
+              <div className="text-center mb-6">
+                <p className="font-bold text-sm" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                  모험을 시작하세요
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  Google 계정으로 바로 시작할 수 있어요
+                </p>
+              </div>
 
-            {/* 구분선 */}
-            <div className="w-full flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-              <span className="text-xs tracking-widest" style={{ color: 'rgba(255,255,255,0.18)' }}>OR</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
-            </div>
-
-            {/* 탭 */}
-            <div className="w-full flex mb-4 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
-              {(['email', 'signup'] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => { setTab(t); setError('') }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold tracking-wider uppercase transition-all ${
-                    tab === t ? 'bg-amber-500 text-black' : 'text-white/35 hover:text-white/60'
-                  }`}
-                >
-                  {t === 'email' ? '로그인' : '회원가입'}
-                </button>
-              ))}
-            </div>
-
-            {/* 이메일 폼 */}
-            <form onSubmit={handleEnter} className="w-full space-y-3">
+              {/* 에러 */}
               {error && (
-                <div className="rounded-xl p-3 text-xs leading-relaxed text-center"
-                  style={{ background: 'rgba(127,29,29,0.3)', border: '1px solid rgba(185,28,28,0.4)', color: '#f87171' }}>
+                <div
+                  className="rounded-xl p-3 mb-4 text-xs text-center leading-relaxed"
+                  style={{ background: 'rgba(127,29,29,0.35)', border: '1px solid rgba(185,28,28,0.4)', color: '#f87171' }}
+                >
                   {error}
                 </div>
               )}
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoFocus
-                className="w-full rounded-xl px-4 py-3.5 text-white text-sm text-center placeholder-gray-700 focus:outline-none"
+
+              {/* Google 버튼 */}
+              <button
+                onClick={handleGoogleLogin}
+                disabled={googleLoading}
+                className="group relative w-full overflow-hidden rounded-2xl py-4 font-bold text-sm transition-all duration-200 disabled:opacity-40 hover:scale-[1.02] active:scale-[0.98]"
                 style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(245,158,11,0.15)',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(240,240,245,0.95) 100%)',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.8)',
+                  color: '#1a1a2e',
                 }}
-                placeholder="your@email.com"
-              />
-
-              {/* LOGIN button with shimmer sweep */}
-              <div className="relative overflow-hidden rounded-xl">
-                <button
-                  type="submit"
-                  disabled={loading || googleLoading || !email.trim()}
-                  className="relative w-full rounded-xl py-3.5 font-black text-sm tracking-widest uppercase transition-all disabled:opacity-30 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {/* 버튼 내 shimmer */}
+                <div
+                  className="absolute inset-0 pointer-events-none animate-btn-shimmer"
                   style={{
-                    background: loading ? 'rgba(245,158,11,0.2)' : 'linear-gradient(135deg, #f59e0b, #d97706)',
-                    color: '#000',
-                    boxShadow: loading ? 'none' : '0 0 24px rgba(245,158,11,0.3)',
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+                    transform: 'skewX(-12deg)',
                   }}
-                >
-                  {loading ? 'LOADING...' : tab === 'email' ? '▶  LOGIN' : '▶  CREATE ACCOUNT'}
-                </button>
-                {!loading && (
-                  <div
-                    className="absolute top-0 bottom-0 w-1/3 pointer-events-none animate-shimmer-sweep"
-                    style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }}
-                  />
+                />
+                {googleLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div
+                      className="w-4 h-4 rounded-full border-2 animate-spin"
+                      style={{ borderColor: 'rgba(0,0,0,0.15)', borderTopColor: 'rgba(0,0,0,0.6)' }}
+                    />
+                    <span style={{ color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', fontSize: '11px' }}>CONNECTING...</span>
+                  </span>
+                ) : (
+                  <span className="relative flex items-center justify-center gap-3">
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span className="font-bold" style={{ color: '#1a1a2e', fontSize: '14px' }}>Google로 계속하기</span>
+                  </span>
                 )}
-              </div>
-            </form>
+              </button>
 
-            <p className="mt-8 text-xs tracking-widest text-center uppercase"
-              style={{ color: 'rgba(55,65,81,0.75)' }}>
-              Restaurant · Airport · Hotel
-            </p>
+              {/* 하단 보증 문구 */}
+              <p className="text-center text-[10px] mt-4" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                가입 즉시 무료 · 신용카드 불필요
+              </p>
+            </div>
+
+            {/* 씬 미리보기 */}
+            <div className="flex items-center gap-2 mt-6">
+              {['🍽️ Restaurant', '✈️ Airport', '🏨 Hotel'].map((s) => (
+                <span key={s} className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                  {s}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

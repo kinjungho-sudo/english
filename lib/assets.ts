@@ -24,12 +24,12 @@ export type Expression = 'neutral' | 'happy' | 'surprised' | 'thinking' | 'sad'
 // ─── Restaurant: combined scene images (character + background) ─────────────
 function getRestaurantScene(stepOrder: number, expression: Expression): string {
   // Expression state (after AI feedback) takes priority
-  if (expression === 'happy' || expression === 'surprised') return 'order done'
-  if (expression === 'thinking' || expression === 'sad')    return 'order mistake'
+  if (expression === 'happy' || expression === 'surprised') return 'order-done'
+  if (expression === 'thinking' || expression === 'sad')    return 'order-mistake'
 
   // Neutral — pick by dialogue step context
   if (stepOrder >= 5) return 'cafe'          // bill / payment
-  if (stepOrder === 4) return 'order change' // dietary / modification
+  if (stepOrder === 4) return 'order-change' // dietary / modification
   return 'order'                             // greeting + ordering (steps 1-3)
 }
 
@@ -47,7 +47,7 @@ export function getSceneUrl(
 
   if (slug === 'restaurant') {
     const scene = getRestaurantScene(stepOrder, expression)
-    return `/assets/restaurant/${encodeURIComponent(scene)}.png`
+    return `/assets/restaurant/${scene}.png`
   }
 
   // Airport / Hotel: no combined scenes yet — fall back to gradient + emoji
