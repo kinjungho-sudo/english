@@ -740,17 +740,13 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
           {/* 피드백 패널 */}
           {lastFeedback && !npcResponse && attempt > 0 && !lastGoalAchieved && (
             (() => {
-              const isWrong = !lastPartialPass
+              const isNiceTry = lastScore !== null && lastScore >= 30 && lastScore < 70
+              const isWrong   = lastScore === 0 || lastScore === null
               return (
-                <div className="rounded-xl px-4 py-2.5 space-y-1 animate-fade-in-up" style={{
+                <div className="rounded-xl px-4 py-2.5 space-y-2 animate-fade-in-up" style={{
                   background: isWrong ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.07)',
                   border: `1px solid ${isWrong ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
                 }}>
-                  {lastPartialPass && (
-                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(245,158,11,0.55)' }}>
-                      유사 표현 인정 — 다음 단계로 진행
-                    </p>
-                  )}
                   <p className={`text-[12px] leading-relaxed ${isWrong ? 'text-red-300/70' : 'text-amber-200/70'}`}>
                     {lastFeedback}
                   </p>
@@ -759,13 +755,24 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
                       {lastCorrection}
                     </p>
                   )}
+                  {/* Nice try → 재도전 or 넘어가기 선택 */}
+                  {isNiceTry && attempt < MAX_ATTEMPTS && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => goNext(score)}
+                        className="flex-1 py-2 rounded-lg text-[11px] font-bold tracking-wide transition-all text-white/30 hover:text-white/60 hover:bg-white/5 border border-white/8"
+                      >
+                        그냥 넘어갈게요 →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })()
           )}
 
-          {/* 힌트 + 넘어가기 — wrong이고 MAX_ATTEMPTS 모두 소진 시에만 */}
-          {attempt >= MAX_ATTEMPTS && !npcResponse && !lastGoalAchieved && !lastPartialPass && currentStep.hint_template && (
+          {/* 힌트 + 넘어가기 — 시도 모두 소진 & 완전 오답일 때 */}
+          {attempt >= MAX_ATTEMPTS && !npcResponse && !lastGoalAchieved && lastScore === 0 && currentStep.hint_template && (
             <div className="rounded-xl px-4 py-3 space-y-2.5 animate-fade-in-up"
               style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)' }}>
               <div className="flex items-start gap-2">
@@ -784,7 +791,7 @@ export default function GameScene({ scenario, steps, userId, mistakeStepIds, cha
           )}
 
 
-          {/* 추천 표현 — 통과했지만 90점 미만일 때 NPC 응답과 함께 표시 */}
+          {/* 추천 표현 — Good(aiScore 70~89)일 때 NPC 응답과 함께 표시 */}
           {npcResponse && lastGoalAchieved && lastScore !== null && lastScore < 90 && lastNaturalExpression && (
             <div
               className="rounded-xl px-4 py-3 space-y-1 animate-fade-in-up"
