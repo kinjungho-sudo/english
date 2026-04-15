@@ -204,6 +204,43 @@ If keywordUsed: false → score can be anything (0–100) based on actual qualit
                          is fully achieved.
 
 This rule ensures consistent, predictable feedback: use the target word = pass.
+
+═══════════════════════════════════════════════════════════════
+FLEXIBLE SLOT RULE — Numbers, Names, Places, Weather & All Variable Values
+═══════════════════════════════════════════════════════════════
+
+Many travel expressions contain SLOTS where ANY value of that type is correct.
+Treat the following as interchangeable placeholders — never penalize a different value:
+
+NUMBERS / QUANTITIES
+- "Table for 2" → "Table for 5", "Table for 10" — any number ✅
+- "3 nights" → "7 nights", "1 night" ✅
+- "2 bags", "room 412", "gate 23", "flight 305", "size 8" — any number ✅
+
+PEOPLE'S NAMES
+- "My name is John" → "My name is Park Jinho", "My name is María" ✅
+- "Reservation under Smith" → "Reservation under Kim" ✅
+
+PLACE NAMES / DESTINATIONS
+- "I'm going to New York" → "I'm going to Busan", "I'm going to Paris" ✅
+- "Take me to Central Park" → "Take me to Times Square" ✅
+- Any city, district, landmark, hotel name, airport name — all interchangeable ✅
+
+WEATHER CONDITIONS
+- "It's sunny today" → "It's rainy", "It's cloudy", "It's hot" ✅
+- Any weather word (sunny, rainy, cloudy, windy, hot, cold, warm, foggy) is valid ✅
+
+TIMES / DATES
+- "At 3 PM" → "At 7 AM", "At noon" ✅
+- "On Monday" → "On Friday", "On the 15th" ✅
+
+COLORS, SIZES, FLAVORS, ANY PREFERENCE
+- "The blue one" → "The red one", "The large one" ✅
+- "Vanilla latte" → "Chocolate latte", "Caramel latte" ✅
+
+CORE RULE: Evaluate PHRASE STRUCTURE and KEY EXPRESSIONS only.
+The specific value filling a slot (number, name, place, weather, etc.) is IRRELEVANT to scoring.
+If the sentence structure is correct and the communicative goal is achieved → score 70+.
 `
 
 export interface ChatMessage {
@@ -301,8 +338,29 @@ export async function POST(request: NextRequest) {
       : []
     const allKeywords = safeKeywords.length > 0 ? safeKeywords : hintFallbackKeywords
 
+    // Flexible keyword match: strip numbers from both keyword and input before comparing.
+    // "Table for 2" keyword → normalized to "table for" → matches "Table for 5, please" ✅
+    // Also strips standalone names (capitalized single words not in common English words).
+    function normalizeForMatch(str: string): string {
+      return str
+        .toLowerCase()
+        .replace(/\b\d+\b/g, '')          // remove all numbers
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+
+    const inputNorm = normalizeForMatch(inputLower)
+
     const keywordUsed = allKeywords.length > 0 &&
-      allKeywords.some(k => inputLower.includes(k.toLowerCase()))
+      allKeywords.some(k => {
+        const kNorm = normalizeForMatch(k)
+        // If after normalization the keyword is empty (was only a number/name), skip
+        if (!kNorm) return false
+        // Check if the normalized keyword phrase appears in the normalized input
+        if (inputNorm.includes(kNorm)) return true
+        // Also check original (non-normalized) match as fallback
+        return inputLower.includes(k.toLowerCase())
+      })
 
     const difficultyInstruction =
       difficulty === 'easy'
@@ -311,12 +369,22 @@ export async function POST(request: NextRequest) {
         ? '\nDIFFICULTY: hard — No hints, no translation available. Be strict and realistic. Perfect grammar AND natural phrasing required for 90+. Keyword alone without proper sentence structure scores 30–50. Do NOT embed any hints or suggestions in the NPC response — treat the learner as a real traveler with no scaffolding.'
         : '\nDIFFICULTY: normal — Standard evaluation. Minor grammar errors acceptable for 70+. NPC may give a subtle contextual nudge if the learner is close.'
 
+    // Detect if keywords contain variable slots (numbers, names, places, weather, etc.)
+    const WEATHER_WORDS = ['sunny', 'rainy', 'cloudy', 'windy', 'hot', 'cold', 'warm', 'foggy', 'snowy', 'stormy']
+    const hasNumericSlot = safeKeywords.some(k => /\d/.test(k))
+    const hasNameSlot = safeKeywords.some(k => /\b[A-Z][a-z]{1,}\b/.test(k))
+    const hasWeatherSlot = safeKeywords.some(k => WEATHER_WORDS.some(w => k.toLowerCase().includes(w)))
+    const hasSlot = hasNumericSlot || hasNameSlot || hasWeatherSlot
+    const slotNote = hasSlot
+      ? '\nNOTE: The target keywords contain a variable slot (number / name / place / weather / etc.) — treat it as a PLACEHOLDER. Any value of that type the learner uses is fully acceptable. Evaluate phrase structure only, not the specific value.'
+      : ''
+
     const dynamicMessage = `NPC: ${npcName}
 Location: ${scenarioLocation || 'a travel location'}
 Learning goal — target keywords: ${JSON.stringify(safeKeywords)}
 keywordUsed: ${keywordUsed}
 Hint: "${hintTemplate ?? 'none'}"
-Attempt: ${attempt} / ${maxAttempts}${isLastAttempt ? ' (LAST — be warm, move scene forward)' : ''}${difficultyInstruction}
+Attempt: ${attempt} / ${maxAttempts}${isLastAttempt ? ' (LAST — be warm, move scene forward)' : ''}${difficultyInstruction}${slotNote}
 
 Conversation so far:
 ${historyText || '(just started)'}
