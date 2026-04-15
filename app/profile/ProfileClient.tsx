@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getLevelInfo, calculateXP, LEVELS } from '@/lib/levels'
 import { useMute } from '@/lib/useMute'
+import ActivityCalendar from '@/components/ActivityCalendar'
 import type { UserProgress, UserMistake, Scenario } from '@/lib/scenarios/data'
 import type { User } from '@supabase/supabase-js'
 
@@ -24,6 +25,8 @@ type Props = {
   mastered: UserMistake[]
   unmastered: UserMistake[]
   scenarios: Scenario[]
+  activityDates: string[]
+  streak: number
 }
 
 const AVATARS = ['🧑‍💼', '👩‍✈️', '🧑‍🍳', '🧝', '🦸', '🧙', '👨‍🎓', '🧑‍🚀']
@@ -34,7 +37,7 @@ const DIFFICULTIES = [
   { key: 'hard',   label: '어려움', desc: '도움 없이 혼자 해결',          color: 'text-red-400',    border: 'border-red-600/40',   bg: 'bg-red-900/20' },
 ]
 
-export default function ProfileClient({ user, profile, progress, mastered, unmastered, scenarios }: Props) {
+export default function ProfileClient({ user, profile, progress, mastered, unmastered, scenarios, activityDates, streak }: Props) {
   void user
   const router = useRouter()
   const supabase = createClient()
@@ -389,6 +392,9 @@ export default function ProfileClient({ user, profile, progress, mastered, unmas
               </div>
             </div>
           )}
+
+          {/* ── 출석 달력 ── */}
+          <ActivityCalendar activeDates={activityDates} streak={streak} />
 
           <div className="pb-6" />
         </div>

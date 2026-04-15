@@ -29,6 +29,8 @@ export default async function ProfilePage() {
       mastered={mastered ?? []}
       unmastered={allMistakes ?? []}
       scenarios={scenarios ?? []}
+      activityDates={(profile as { activity_dates?: string[] })?.activity_dates ?? []}
+      streak={(profile as { streak_count?: number })?.streak_count ?? 0}
     />
   )
 }
