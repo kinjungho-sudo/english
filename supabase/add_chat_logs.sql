@@ -1,11 +1,12 @@
 -- ─── chat_logs table ────────────────────────────────────────────────────────
 -- AI 대화 로그 저장: 모든 /api/chat 요청의 입출력 기록
+-- FK 없이 UUID만 저장 (시나리오/스텝 삭제 시에도 로그 보존)
 
 CREATE TABLE IF NOT EXISTS chat_logs (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  scenario_id       UUID REFERENCES scenarios(id) ON DELETE SET NULL,
-  step_id           UUID REFERENCES dialogue_steps(id) ON DELETE SET NULL,
+  user_id           UUID,
+  scenario_id       UUID,
+  step_id           UUID,
 
   -- 입력
   user_input        TEXT NOT NULL,
@@ -33,14 +34,13 @@ CREATE INDEX IF NOT EXISTS chat_logs_user_id_idx ON chat_logs(user_id);
 CREATE INDEX IF NOT EXISTS chat_logs_scenario_id_idx ON chat_logs(scenario_id);
 CREATE INDEX IF NOT EXISTS chat_logs_created_at_idx ON chat_logs(created_at DESC);
 
--- RLS: 관리자 전용 (일반 유저는 자기 로그만 읽기)
+-- RLS
 ALTER TABLE chat_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own logs"
   ON chat_logs FOR SELECT
   USING (auth.uid() = user_id);
 
--- 서비스 역할 키로만 INSERT (API 서버에서만 삽입)
 CREATE POLICY "Service role can insert logs"
   ON chat_logs FOR INSERT
   WITH CHECK (TRUE);
